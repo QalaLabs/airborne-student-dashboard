@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-primary: 'Montserrat', system-ui, -apple-system, sans-serif;
+    --font-body: 'Roboto', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Official Airborne Brand Palette (60 / 30 / 10 System) */
+    --color-white: #FFFFFF;        /* 60% Canvas & Cards */
+    --color-navy: #00274C;         /* 30% Structural UI, Headings & Primary Brand */
+    --color-navy-dark: #00172E;    /* Deep Navy */
+    --color-navy-deep: #000E1C;    /* Cockpit Midnight */
+    --color-red: #DB241E;          /* 10% Ascend Red (Hero Action & CTAs) */
+    --color-gold: #D8A027;         /* Aviation Gold (100% Success Badges Only) */
+    --color-obsidian: #212121;     /* High-Contrast Body Copy */
+    --color-mid-grey: #8A9BB0;     /* Metadata & Subtle Dividers */
+    --color-light-grey: #F5F6F8;   /* Clean Secondary Surface Canvas */
+  }
+
+  body {
+    font-family: var(--font-body);
+    line-height: 1.5;
+    color: var(--color-obsidian);
+    background-color: var(--color-light-grey);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-primary);
+    color: var(--color-navy);
+  }
+
+  /* Accessible focus states */
+  button:focus-visible, 
+  a:focus-visible, 
+  input:focus-visible, 
+  select:focus-visible, 
+  textarea:focus-visible {
+    outline: 2px solid var(--color-red);
+    outline-offset: 2px;
+  }
+}
+
+/* Brand Typography Helper Classes */
+.font-brand-primary {
+  font-family: var(--font-primary);
+}
+
+.font-brand-body {
+  font-family: var(--font-body);
+}
+
+.font-flight-mono {
+  font-family: var(--font-mono);
+}
+
+/* Custom Cockpit Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 39, 76, 0.04);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 39, 76, 0.22);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(219, 36, 30, 0.6);
+}
+
+/* Brand Aerodynamic Slanted Badges & Cuts */
+.aerodynamic-cut {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+
+.aerodynamic-tag {
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+.aerodynamic-card-corner {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+}
+
+/* Precision Flight Grid Background Pattern */
+.bg-radar-grid {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(0, 39, 76, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 39, 76, 0.04) 1px, transparent 1px);
+}
+
+/* Elevation & Brand Depth */
+.brand-shadow-sm {
+  box-shadow: 0 2px 6px -1px rgba(0, 39, 76, 0.07);
+}
+
+.brand-shadow-md {
+  box-shadow: 0 8px 20px -3px rgba(0, 39, 76, 0.09);
+}
+
+.brand-shadow-lg {
+  box-shadow: 0 16px 36px -6px rgba(0, 39, 76, 0.12);
+}
+
+.gold-glow {
+  box-shadow: 0 0 20px -3px rgba(216, 160, 39, 0.35);
+}
+
+.red-glow {
+  box-shadow: 0 0 20px -3px rgba(219, 36, 30, 0.35);
+}
+
+/* Consistent CTA Buttons */
+.btn-primary-action {
+  background-color: var(--color-red);
+  color: #FFFFFF;
+  font-family: var(--font-primary);
+  font-weight: 700;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+.btn-primary-action:hover {
+  background-color: #B81D18;
+  box-shadow: 0 8px 20px -4px rgba(219, 36, 30, 0.35);
+}
+.btn-primary-action:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary-action {
+  background-color: rgba(0, 39, 76, 0.06);
+  color: var(--color-navy);
+  font-family: var(--font-primary);
+  font-weight: 700;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+.btn-secondary-action:hover {
+  background-color: rgba(0, 39, 76, 0.12);
+}

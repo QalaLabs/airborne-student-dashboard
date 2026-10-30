@@ -1,0 +1,17 @@
+node_modules
+.git
+.gitignore
+*.log
+.vscode
+.idea
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+env/
+venv/
+.env*
+dist
+public/brand_media
+brand_book_summary.txt

@@ -11,9 +11,9 @@ GCP_REGION = os.environ.get("GCP_REGION", "asia-south1")
 # Primary: Google Cloud SQL (airborne-aviation-505100:asia-south1:airborne-db) injected via Cloud Run Secret Manager
 DEFAULT_PROD_DB_URL = os.environ.get(
     "PROD_DATABASE_URL",
-    "postgresql+psycopg2://airborne_app_user:AirborneDB2026@34.93.180.179:5432/airbornedb?sslmode=require"
+    "postgresql+psycopg2://airborne_app_user:phQ%5B%5E%2B4IfLEO%5B%7Dx9U%7B%23%3FK*TLD%3EcB%23JkA@34.93.180.179:5432/airbornedb?sslmode=require"
 )
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///airborne_students.db")
+DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_PROD_DB_URL)
 
 # Main GCR Admin Panel URL & Org ID
 ORG_ID = os.environ.get("ORG_ID", "340e4b30-22bc-44f2-be56-85b061daaddd")

@@ -628,17 +628,19 @@ def record_student_activity(
             return {"success": False, "error": f"Student {student_code} not found in Admin DB"}
 
         now = datetime.utcnow()
-        snap = snapshot or {
-            "studentCode": student.student_code,
-            "name": f"{student.first_name} {student.last_name}",
-            "verb": verb,
-            "title": title
-        }
-        ctx = context or {
-            "source": "Student Dashboard",
-            "portal": "Airborne Aviation Cadet Portal",
-            "campus": "Dwarka Campus (Sector-7, New Delhi)"
-        }
+        snap = dict(snapshot or {})
+        snap.setdefault("studentCode", student.student_code)
+        snap.setdefault("name", f"{student.first_name} {student.last_name}")
+        snap.setdefault("verb", verb)
+        if title:
+            snap.setdefault("title", title)
+        if notes:
+            snap.setdefault("notes", notes)
+
+        ctx = dict(context or {})
+        ctx.setdefault("source", "Student Dashboard")
+        ctx.setdefault("portal", "Airborne Aviation Cadet Portal")
+        ctx.setdefault("campus", "Dwarka Campus (Sector-7, New Delhi)")
 
         # 1. Insert into activity_feed_items (Main Admin Feed)
         feed_item = ActivityFeedItem(
@@ -1092,6 +1094,8 @@ def get_student_activities_from_admin_db(student_code: str, limit: int = 20) -> 
             {
                 "id": str(item.id),
                 "verb": item.verb,
+                "title": (item.object_snapshot or {}).get("title") or item.verb.replace("_", " ").title(),
+                "notes": (item.object_snapshot or {}).get("notes") or "",
                 "objectType": item.object_type,
                 "snapshot": item.object_snapshot or {},
                 "occurredAt": item.occurred_at.strftime("%d %b %Y, %I:%M %p") if item.occurred_at else "Just now",

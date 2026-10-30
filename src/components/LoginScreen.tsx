@@ -19,8 +19,8 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [selectedRole, setSelectedRole] = useState<UserRole>('student');
-  const [identifier, setIdentifier] = useState('AA-CPL-2026-084');
-  const [password, setPassword] = useState('cadet2026');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -29,28 +29,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const handleSwitchRole = (role: UserRole) => {
     setSelectedRole(role);
     setErrorMsg(null);
-    if (role === 'student') {
-      setIdentifier('AA-CPL-2026-084');
-      setPassword('cadet2026');
-    } else {
-      setIdentifier('admin@airborneaviation.in');
-      setPassword('admin2026');
-    }
-  };
-
-  // Quick autofill buttons
-  const autofillCadet = () => {
-    setSelectedRole('student');
-    setIdentifier('AA-CPL-2026-084');
-    setPassword('cadet2026');
-    setErrorMsg(null);
-  };
-
-  const autofillAdmin = () => {
-    setSelectedRole('admin');
-    setIdentifier('admin@airborneaviation.in');
-    setPassword('admin2026');
-    setErrorMsg(null);
+    setIdentifier('');
+    setPassword('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -308,50 +288,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   </>
                 )}
               </button>
-
-              {/* 1-Click Demo Fill Badges */}
-              <div className="pt-3 border-t border-slate-200">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5 text-center font-brand-primary">
-                  Fast Verification Credentials (1-Click Access)
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={autofillCadet}
-                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
-                      selectedRole === 'student'
-                        ? 'border-[#00274C] bg-blue-50/80 text-[#00274C]'
-                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                    }`}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-[#00274C] text-white flex items-center justify-center shrink-0">
-                      <Plane className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="truncate">
-                      <p className="font-bold font-brand-primary truncate">Cadet Ruzal Dhral</p>
-                      <p className="text-[10px] text-slate-500 font-flight-mono">AA-CPL-2026-084</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={autofillAdmin}
-                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
-                      selectedRole === 'admin'
-                        ? 'border-[#DB241E] bg-red-50/80 text-[#DB241E]'
-                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                    }`}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-[#DB241E] text-white flex items-center justify-center shrink-0">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="truncate">
-                      <p className="font-bold font-brand-primary truncate">Capt. Navrang Singh</p>
-                      <p className="text-[10px] text-slate-500 font-flight-mono">admin@airborneaviation.in</p>
-                    </div>
-                  </button>
-                </div>
-              </div>
             </form>
           </div>
 

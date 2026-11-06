@@ -258,7 +258,6 @@ class LmsModule(Base):
     order = Column(Integer, default=0)
     pass_percent = Column("passPercent", Integer, default=70)
     max_attempts = Column("maxAttempts", Integer, default=3)
-    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
 
 class LmsChapter(Base):
     """Airborne Admin: lms_chapters table"""

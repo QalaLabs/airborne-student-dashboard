@@ -10,8 +10,7 @@ import {
   CloudSun,
   Award,
   Eye,
-  EyeOff,
-  Zap
+  EyeOff
 } from 'lucide-react';
 import { AuthUser, UserRole } from '../types/dashboard';
 import { AirborneLogo } from './AirborneLogo';
@@ -37,12 +36,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setPassword('');
   };
 
-  const handleQuickFill = (role: UserRole, id: string, pass: string) => {
-    setSelectedRole(role);
-    setIdentifier(id);
-    setPassword(pass);
-    setErrorMsg(null);
-  };
 
   const executeLogin = async (roleToUse: UserRole, idToUse: string, passToUse: string) => {
     setErrorMsg(null);
@@ -160,50 +153,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </p>
           </div>
 
-          {/* 1-Tap Quick Demo Switcher Bar */}
-          <div className="mb-4 bg-[#00274C]/60 backdrop-blur-md border border-white/15 p-2 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-            <span className="text-[11px] font-bold text-[#D8A027] uppercase tracking-wider flex items-center gap-1 shrink-0 px-2">
-              <Zap className="w-3.5 h-3.5 text-[#D8A027] fill-[#D8A027]" />
-              Quick Demo Access:
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  handleQuickFill('student', 'AA-CPL-2026-084', 'cadet2026');
-                }}
-                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
-                title="Cadet Ruzal Dhral (88.5% DGCA Compliant)"
-              >
-                <Plane className="w-3 h-3 text-[#38bdf8]" />
-                <span>Cadet Ruzal (88.5%)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  handleQuickFill('student', 'AA-CPL-2026-091', 'cadet2026');
-                }}
-                className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900/60 text-red-200 text-[11px] font-medium border border-red-500/30 transition-all flex items-center gap-1 cursor-pointer"
-                title="Cadet Rohan Sengupta (77.5% Attendance Alert)"
-              >
-                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                <span>Cadet Rohan (&lt;80%)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  handleQuickFill('admin', 'admin@airborneaviation.in', 'admin2026');
-                }}
-                className="px-2.5 py-1 rounded-lg bg-[#D8A027]/20 hover:bg-[#D8A027]/30 text-[#D8A027] text-[11px] font-bold border border-[#D8A027]/40 transition-all flex items-center gap-1 cursor-pointer"
-                title="Operations Admin (Capt. Navrang Singh)"
-              >
-                <ShieldCheck className="w-3 h-3 text-[#D8A027]" />
-                <span>Admin Console</span>
-              </button>
-            </div>
-          </div>
 
           {/* Authentication Card */}
           <div className="bg-white text-[#212121] rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
@@ -306,19 +255,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 font-brand-primary">
                     {selectedRole === 'student' ? 'Flight PIN / Password' : 'Admin Security Passphrase'}
                   </label>
-                  <span 
-                    onClick={() => {
-                      if (selectedRole === 'student') {
-                        setPassword('cadet2026');
-                      } else {
-                        setPassword('admin2026');
-                      }
-                    }}
-                    className="text-[11px] text-[#00274C] hover:underline cursor-pointer font-medium"
-                    title="Insert default demo credential PIN"
+                  <a 
+                    href="mailto:support@airborneaviation.in?subject=Airborne%20Portal%20Password%20Assistance" 
+                    className="text-[11px] text-slate-500 hover:text-[#00274C] hover:underline font-medium"
                   >
-                    Reset Demo PIN
-                  </span>
+                    Forgot credentials?
+                  </a>
                 </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">

@@ -95,7 +95,8 @@ class QuizSubmitRequest(BaseModel):
     subject: str = "Air Navigation"
     score: int
     max_score: int
-    answers: Optional[Dict[str, Any]] = None
+    answers: Optional[Any] = None
+    module_id: Optional[str] = None
 
 class CourseProgressRequest(BaseModel):
     student_id: str = "AA-CPL-2026-084"
@@ -534,7 +535,8 @@ def api_submit_lms_quiz(req: QuizSubmitRequest):
         subject=req.subject,
         score=req.score,
         max_score=req.max_score,
-        answers=req.answers
+        answers=req.answers,
+        module_id=req.module_id
     )
 
 @app.get("/api/v1/lms/certificates/{student_code}")

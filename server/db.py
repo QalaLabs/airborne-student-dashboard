@@ -1300,7 +1300,8 @@ def record_quiz_attempt_in_admin_db(
     subject: str,
     score: int,
     max_score: int,
-    answers: Optional[Dict[str, Any]] = None
+    answers: Optional[Dict[str, Any]] = None,
+    module_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Records DGCA Mock Quiz results against the student in the Admin DB.
@@ -1315,11 +1316,34 @@ def record_quiz_attempt_in_admin_db(
         pct = round((score / max_score) * 100) if max_score > 0 else 0
         passed = pct >= 70
 
-        try:
-            first_mod = session.execute(text("SELECT id FROM lms_modules LIMIT 1")).scalar()
-        except Exception:
-            first_mod = None
-        module_uuid = first_mod or uuid.UUID("4d8e2788-914b-4c77-8f12-d9b3d7459488")
+        module_uuid = None
+        if module_id:
+            try:
+                module_uuid = uuid.UUID(str(module_id))
+            except Exception:
+                pass
+
+        if not module_uuid and subject:
+            sub = str(subject).strip().lower()
+            clean_sub = sub.replace("cpl", "").replace("·", "").replace("-", "").strip()
+            m = session.query(LmsModule).filter(func.lower(LmsModule.title).contains(clean_sub)).first()
+            if m:
+                module_uuid = m.id
+            else:
+                c = session.query(LmsCourse).filter(func.lower(LmsCourse.title).contains(clean_sub)).first()
+                if c:
+                    st = session.query(LmsStage).filter(LmsStage.course_id == c.id).first()
+                    if st:
+                        m = session.query(LmsModule).filter(LmsModule.stage_id == st.id).first()
+                        if m:
+                            module_uuid = m.id
+
+        if not module_uuid:
+            try:
+                first_mod = session.execute(text("SELECT id FROM lms_modules LIMIT 1")).scalar()
+            except Exception:
+                first_mod = None
+            module_uuid = first_mod or uuid.UUID("4d8e2788-914b-4c77-8f12-d9b3d7459488")
 
         # Dynamically calculate attemptNumber for (studentId, moduleId) unique constraint
         try:
@@ -1343,6 +1367,35 @@ def record_quiz_attempt_in_admin_db(
         )
 
         session.add(attempt)
+
+        # Update or insert LmsAssessment
+        try:
+            assessment = session.query(LmsAssessment).filter_by(
+                student_id=student.id,
+                module_id=module_uuid
+            ).first()
+            if assessment:
+                assessment.attempts += 1
+                assessment.score = max(assessment.score, score)
+                if passed:
+                    assessment.status = "PASSED"
+                elif assessment.status != "PASSED":
+                    assessment.status = "FAILED"
+            else:
+                assessment = LmsAssessment(
+                    id=uuid.uuid4(),
+                    student_id=student.id,
+                    user_id=student.user_id,
+                    module_id=module_uuid,
+                    score=score,
+                    status="PASSED" if passed else "FAILED",
+                    attempts=next_attempt,
+                    metadata_json={"subject": subject, "score": score, "maxScore": max_score, "percentage": f"{pct}%"}
+                )
+                session.add(assessment)
+        except Exception as assess_err:
+            logger.warning("Could not sync LmsAssessment: %s", assess_err)
+
         session.commit()
 
         # Universal activity logging
@@ -2298,10 +2351,13 @@ def get_live_lms_courses_and_chapters():
         for c in courses:
             stages = session.query(LmsStage).filter(LmsStage.course_id == c.id).order_by(LmsStage.order).all()
             stages_data = []
+            course_q_total = 0
             for st in stages:
                 mods = session.query(LmsModule).filter(LmsModule.stage_id == st.id).order_by(LmsModule.order).all()
                 mod_data = []
                 for m in mods:
+                    m_q_count = session.query(LmsQuestion).filter(LmsQuestion.module_id == m.id).count()
+                    course_q_total += m_q_count
                     chaps = session.query(LmsChapter).filter(LmsChapter.module_id == m.id).order_by(LmsChapter.order).all()
                     chap_data = []
                     for ch in chaps:
@@ -2315,6 +2371,10 @@ def get_live_lms_courses_and_chapters():
                     mod_data.append({
                         "id": str(m.id),
                         "title": m.title,
+                        "order": m.order,
+                        "passPercent": m.pass_percent,
+                        "maxAttempts": m.max_attempts,
+                        "questionCount": m_q_count,
                         "chapters": chap_data
                     })
                 stages_data.append({
@@ -2326,6 +2386,7 @@ def get_live_lms_courses_and_chapters():
                 "id": str(c.id),
                 "title": c.title,
                 "slug": c.slug,
+                "totalQuestions": course_q_total,
                 "stages": stages_data
             })
         return result
@@ -2335,15 +2396,54 @@ def get_live_lms_courses_and_chapters():
     finally:
         session.close()
 
-def get_live_questions_for_practice(chapter_id=None, subject=None, limit=50):
+def get_live_questions_for_practice(chapter_id=None, module_id=None, course_id=None, subject=None, limit=50):
     session = SessionLocal()
     try:
         q_query = session.query(LmsQuestion)
+        filtered = False
+        
         if chapter_id:
             try:
                 q_query = q_query.filter(LmsQuestion.chapter_id == uuid.UUID(str(chapter_id)))
+                filtered = True
             except Exception:
                 pass
+                
+        if not filtered and module_id:
+            try:
+                q_query = q_query.filter(LmsQuestion.module_id == uuid.UUID(str(module_id)))
+                filtered = True
+            except Exception:
+                pass
+                
+        if not filtered and course_id:
+            try:
+                c_uuid = uuid.UUID(str(course_id))
+                mods = session.query(LmsModule.id).join(LmsStage, LmsModule.stage_id == LmsStage.id).filter(LmsStage.course_id == c_uuid).all()
+                mod_ids = [m[0] for m in mods]
+                if mod_ids:
+                    q_query = q_query.filter(LmsQuestion.module_id.in_(mod_ids))
+                    filtered = True
+            except Exception:
+                pass
+
+        if not filtered and subject:
+            sub = str(subject).strip().lower()
+            clean_sub = sub.replace("cpl", "").replace("·", "").replace("-", "").strip()
+            matching_mod_ids = session.query(LmsModule.id).filter(func.lower(LmsModule.title).contains(clean_sub)).all()
+            if matching_mod_ids:
+                q_query = q_query.filter(LmsQuestion.module_id.in_([m[0] for m in matching_mod_ids]))
+                filtered = True
+            else:
+                matching_course_mods = session.query(LmsModule.id).join(LmsStage, LmsModule.stage_id == LmsStage.id).join(LmsCourse, LmsStage.course_id == LmsCourse.id).filter(
+                    or_(
+                        func.lower(LmsCourse.title).contains(clean_sub),
+                        func.lower(LmsCourse.slug).contains(clean_sub)
+                    )
+                ).all()
+                if matching_course_mods:
+                    q_query = q_query.filter(LmsQuestion.module_id.in_([m[0] for m in matching_course_mods]))
+                    filtered = True
         
         questions = q_query.order_by(LmsQuestion.order.asc()).limit(limit).all()
         if not questions:
@@ -2354,27 +2454,49 @@ def get_live_questions_for_practice(chapter_id=None, subject=None, limit=50):
         for q in questions:
             raw_opts = q.options or []
             opts_text = []
+            opts_detail = []
             if isinstance(raw_opts, list):
-                for opt in raw_opts:
+                for idx, opt in enumerate(raw_opts):
                     if isinstance(opt, dict):
-                        opts_text.append(opt.get("text", ""))
+                        txt = opt.get("text", "")
+                        opts_text.append(txt)
+                        opts_detail.append({
+                            "id": opt.get("id", chr(97 + idx)),
+                            "text": txt,
+                            "imageUrl": opt.get("imageUrl")
+                        })
                     elif isinstance(opt, str):
                         opts_text.append(opt)
+                        opts_detail.append({
+                            "id": chr(97 + idx),
+                            "text": opt,
+                            "imageUrl": None
+                        })
             
             c_idx = opt_map.get(str(q.correct_option_id).lower(), 0)
             
+            mod_title = ""
+            try:
+                mod_obj = session.query(LmsModule).filter(LmsModule.id == q.module_id).first()
+                if mod_obj:
+                    mod_title = mod_obj.title
+            except Exception:
+                pass
+            
             formatted.append({
                 "id": str(q.id),
+                "moduleId": str(q.module_id),
                 "chapterId": str(q.chapter_id) if q.chapter_id else None,
                 "question": q.stem,
                 "imageUrl": q.image_url,
                 "options": opts_text,
+                "optionsDetail": opts_detail,
                 "correctAnswer": c_idx,
                 "correctOptionId": q.correct_option_id,
                 "explanation": q.explanation or "Official DGCA CPL Concept Reference (Airborne Academy Ground School).",
                 "points": q.points,
                 "difficulty": q.difficulty,
-                "subject": subject or "DGCA CPL Ground School"
+                "subject": mod_title or subject or "DGCA CPL Ground School"
             })
         return formatted
     except Exception as e:
@@ -2416,5 +2538,5 @@ def get_live_student_certificates(student_code: str):
     finally:
         session.close()
 
-def submit_live_quiz_attempt(student_code: str, subject: str, score: int, max_score: int, answers=None):
-    return record_quiz_attempt_in_admin_db(student_code, subject, score, max_score, answers)
+def submit_live_quiz_attempt(student_code: str, subject: str, score: int, max_score: int, answers=None, module_id=None):
+    return record_quiz_attempt_in_admin_db(student_code, subject, score, max_score, answers, module_id=module_id)

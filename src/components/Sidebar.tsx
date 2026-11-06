@@ -49,22 +49,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const studentNavItems: { id: TabType; label: string; icon: any; badge?: string; badgeColor?: string }[] = [
     { id: 'overview', label: 'Cockpit HUD', icon: LayoutDashboard },
     { id: 'timetable', label: 'Flight Timetable', icon: CalendarClock, badge: 'Live Today', badgeColor: 'bg-emerald-600' },
-    { id: 'batches', label: 'My Batch (Delta-26)', icon: Users, badge: 'Max 25', badgeColor: 'bg-[#D8A027]' },
-    { id: 'courses', label: 'Ground Courses', icon: BookOpen, badge: '5 DGCA', badgeColor: 'bg-[#00274C]' },
+    { id: 'batches', label: 'My Batch', icon: Users, badge: 'Max 25', badgeColor: 'bg-[#D8A027]' },
+    { id: 'courses', label: 'Ground Courses', icon: BookOpen, badge: 'DGCA', badgeColor: 'bg-[#00274C]' },
     { id: 'certificates', label: 'Certificates & Endorsements', icon: Award, badge: 'DGCA', badgeColor: 'bg-[#D8A027]' },
     { id: 'attendance', label: 'Mark Attendance', icon: CheckSquare, badge: `${student.attendanceRate}%`, badgeColor: student.attendanceRate >= 80 ? 'bg-emerald-600' : 'bg-[#DB241E]' },
     { id: 'chatbot', label: 'AeroBot', icon: Headset, badge: 'On', badgeColor: '' },
-    { id: 'fees', label: 'Fees & Accounts', icon: CreditCard, badge: 'Due Nov 15', badgeColor: 'bg-[#D8A027]' },
+    { id: 'fees', label: 'Fees & Accounts', icon: CreditCard, badge: student.pendingFee > 0 ? `Due ₹${(student.pendingFee / 1000).toFixed(0)}k` : 'Clear', badgeColor: 'bg-[#D8A027]' },
     { id: 'other-courses', label: 'Explore More Ratings', icon: Compass, badge: 'New', badgeColor: 'bg-[#00274C]' },
   ];
 
   // Navigation Items for Admin View
   const adminNavItems: { id: TabType; label: string; icon: any; badge?: string; badgeColor?: string }[] = [
     { id: 'admin-overview', label: 'Operations Command', icon: Activity },
-    { id: 'admin-cadets', label: 'Cadets Flight Roster', icon: Users, badge: '8 Cadets', badgeColor: 'bg-[#00274C]' },
+    { id: 'admin-cadets', label: 'Cadets Flight Roster', icon: Users, badge: 'Roster', badgeColor: 'bg-[#00274C]' },
     { id: 'admin-bridge', label: 'Admin OS & Provisioning', icon: KeyRound, badge: 'Connected', badgeColor: 'bg-[#D8A027]' },
     { id: 'admin-timetable', label: 'Ground Timetable', icon: CalendarClock, badge: 'Dwarka', badgeColor: 'bg-emerald-600' },
-    { id: 'admin-fees', label: 'Fee Collection Ledger', icon: CreditCard, badge: '87.8%', badgeColor: 'bg-[#D8A027]' },
+    { id: 'admin-fees', label: 'Fee Collection Ledger', icon: CreditCard, badge: 'Ledger', badgeColor: 'bg-[#D8A027]' },
     { id: 'admin-activity', label: 'Biometric & Audit Logs', icon: Clock, badge: 'Live', badgeColor: 'bg-[#DB241E]' },
   ];
 

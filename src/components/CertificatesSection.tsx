@@ -42,99 +42,7 @@ export const CertificatesSection: React.FC<CertificatesSectionProps> = ({
 }) => {
   const [selectedCert, setSelectedCert] = useState<CertificateItem | null>(null);
 
-  const defaultCertificates: CertificateItem[] = [
-    {
-      id: 'CERT-01',
-      code: 'REG-CPL-END',
-      title: 'DGCA Air Regulations Ground School Completion',
-      category: 'DGCA Theory Endorsement',
-      instructor: 'Capt. S. K. Mehra',
-      instructorRole: 'Senior DGCA Ground Instructor',
-      dateIssued: '24 Oct 2026',
-      validTill: 'Permanent (DGCA Session 3/2026)',
-      status: 'ISSUED',
-      credentialNo: `AAA-CPL-REG-2026-${student.rollNumber?.slice(-3) || '084'}`,
-      hoursOrLectures: '30 / 30 Lectures (100% Attendance)',
-      gradeScore: '92% (Mock Cleared)',
-      description: 'Official endorsement certifying full ground course completion in ICAO Annexes, Aircraft Act 1934, Indian Aircraft Rules 1937, and Flight Time Duty Limitations per DGCA CAR Section 7.'
-    },
-    {
-      id: 'CERT-02',
-      code: 'MET-CPL-END',
-      title: 'Aviation Meteorology Advanced Ground Endorsement',
-      category: 'DGCA Theory Endorsement',
-      instructor: 'Capt. Alok Sharma',
-      instructorRole: 'Chief Meteorology Mentor',
-      dateIssued: '30 Oct 2026',
-      validTill: 'Permanent (DGCA Session 3/2026)',
-      status: 'ISSUED',
-      credentialNo: `AAA-CPL-MET-2026-${student.rollNumber?.slice(-3) || '084'}`,
-      hoursOrLectures: '27 / 30 Lectures (90% Attendance)',
-      gradeScore: '89% (Mock Cleared)',
-      description: 'Endorsement covering Altimetry, Pressure Systems, Monsoon Dynamics, Jet Streams, CAT (Clear Air Turbulence), and METAR/TAF aeronautical weather decoding.'
-    },
-    {
-      id: 'CERT-03',
-      code: 'NAV-CPL-TRK',
-      title: 'Air Navigation & Flight Planning Proficiency',
-      category: 'DGCA Theory Endorsement',
-      instructor: 'Capt. Navrang Singh',
-      instructorRole: 'Chief Flight Instructor & Ground School Head',
-      dateIssued: 'Pending Final Mock',
-      validTill: 'Target Nov 2026',
-      status: 'IN_PROGRESS',
-      credentialNo: `AAA-CPL-NAV-2026-${student.rollNumber?.slice(-3) || '084'}`,
-      hoursOrLectures: '32 / 40 Lectures (80% Progress)',
-      gradeScore: '84% (Avg Practice Score)',
-      description: 'Practical navigation plotting, 1:1,000,000 WAC aeronautical chart navigation, VOR/DME radial intercepts, and 1-in-60 flight calculations.'
-    },
-    {
-      id: 'CERT-04',
-      code: 'RTR-WPC-END',
-      title: 'Radio Telephony Restricted (Aeronautical) Clearance',
-      category: 'Flight Operations Clearance',
-      instructor: 'Capt. Navrang Singh',
-      instructorRole: 'Radio Telephony Simulation Director',
-      dateIssued: '15 Oct 2026 (Part 1 Cleared)',
-      validTill: 'Valid for WPC Exam Dec 2026',
-      status: 'IN_PROGRESS',
-      credentialNo: `AAA-RTR-WPC-2026-${student.rollNumber?.slice(-3) || '084'}`,
-      hoursOrLectures: '11 / 20 Simulation Labs',
-      gradeScore: '86% Simulation Score',
-      description: 'Proficiency certificate in standard ICAO radiotelephony phraseology, distress Mayday/Pan-Pan procedures, and WPC Part 1 transmission drills.'
-    },
-    {
-      id: 'CERT-05',
-      code: 'DGCA-MED-01',
-      title: 'DGCA Class 1 Initial / Renewal Medical Assessment',
-      category: 'Medical Assessment',
-      instructor: 'Dr. (Air Commodore) V. K. Taneja',
-      instructorRole: 'DGCA Empaneled Class 1 Medical Examiner',
-      dateIssued: '12 Jan 2026',
-      validTill: '11 Jan 2027 (Active)',
-      status: 'ISSUED',
-      credentialNo: `DGCA-MED-CA35-${student.computerNumber || 'C09827341'}`,
-      hoursOrLectures: 'Full Class 1 Aeromedical Cleared',
-      description: 'Official DGCA Form CA-35 medical fitness clearance certifying fit for commercial pilot license privileges without aeronautical restrictions.'
-    },
-    {
-      id: 'CERT-06',
-      code: 'SIM-PFD-A320',
-      title: 'A320 Cockpit Orientation & PFD Scan Certification',
-      category: 'Simulator Rating',
-      instructor: 'Capt. Navrang Singh',
-      instructorRole: 'Simulator Training Evaluator',
-      dateIssued: '18 Sep 2026',
-      validTill: 'Permanent',
-      status: 'ISSUED',
-      credentialNo: `AAA-SIM-A320-2026-${student.rollNumber?.slice(-3) || '084'}`,
-      hoursOrLectures: '12 Hours Synthetic Flight Training (Dwarka Sim Bay)',
-      gradeScore: 'Certified Flight Ready',
-      description: 'Glass cockpit instrument scan, primary flight display interpretation, flight director tracking, and autopilot cross-cockpit coordination.'
-    }
-  ];
-
-  const certificates = (propCertificates && propCertificates.length > 0) ? propCertificates : defaultCertificates;
+  const certificates = propCertificates || [];
 
   return (
     <div className="space-y-6">
@@ -223,8 +131,41 @@ export const CertificatesSection: React.FC<CertificatesSectionProps> = ({
       </div>
 
       {/* Certificates Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {certificates.map((cert) => {
+      {certificates.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center space-y-4">
+          <Award className="w-12 h-12 text-[#D8A027] mx-auto opacity-75" />
+          <div className="space-y-1">
+            <h3 className="font-bold font-brand-primary text-[#00274C] text-base">
+              No Course Endorsements Issued Yet
+            </h3>
+            <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
+              Official DGCA ground school endorsements (Air Regulations, Meteorology, Navigation, RTR, and Technical General) are awarded upon completing &ge;80% attendance in the prescribed ground school lectures and clearing the academy internal mock exams.
+            </p>
+          </div>
+
+          <div className="max-w-md mx-auto p-4 bg-slate-50 rounded-xl border border-slate-200 text-left text-xs font-brand-primary space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block">
+              Endorsement Eligibility Checklist
+            </span>
+            <div className="flex items-center justify-between text-slate-700">
+              <span>Attendance (&ge; 80% Rule):</span>
+              <span className={`font-bold font-flight-mono ${student.attendanceRate >= 80 ? 'text-emerald-700' : 'text-[#DB241E]'}`}>
+                {student.attendanceRate}% {student.attendanceRate >= 80 ? '(Eligible)' : '(Below Cutoff)'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-slate-700">
+              <span>DGCA Internal Mock Clearance:</span>
+              <span className="font-bold text-amber-700 font-flight-mono">In Progress</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-700">
+              <span>Class 1 Medical (Form CA-35):</span>
+              <span className="font-bold text-slate-700 font-flight-mono">Pending Upload</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {certificates.map((cert) => {
           const isIssued = cert.status === 'ISSUED';
 
           return (
@@ -301,7 +242,8 @@ export const CertificatesSection: React.FC<CertificatesSectionProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Certificate Preview Modal */}
       {selectedCert && (

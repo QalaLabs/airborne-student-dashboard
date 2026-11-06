@@ -466,6 +466,18 @@ def init_db():
         # Create tables if SQLite; for Postgres, Prisma migrations handle existing tables
         if "sqlite" in str(engine.url):
             Base.metadata.create_all(bind=engine)
+            with engine.connect() as conn:
+                for col_sql in [
+                    "ALTER TABLE lms_modules ADD COLUMN stageId CHAR(32)",
+                    "ALTER TABLE lms_modules ADD COLUMN `order` INTEGER DEFAULT 0",
+                    "ALTER TABLE lms_modules ADD COLUMN passPercent INTEGER DEFAULT 70",
+                    "ALTER TABLE lms_modules ADD COLUMN maxAttempts INTEGER DEFAULT 3",
+                ]:
+                    try:
+                        conn.execute(text(col_sql))
+                        conn.commit()
+                    except Exception:
+                        pass
         else:
             # Create our helper tables (timetable_sessions, student_attendances) if not present
             TimetableSession.__table__.create(bind=engine, checkfirst=True)
@@ -773,23 +785,32 @@ def get_student_dashboard_from_admin_db(student_code: str = DEFAULT_STUDENT_CODE
             StudentAttendance.date == today_str
         ).first()
 
+        # Calculate attendance dynamically from student attendance records
+        att_rows = session.query(StudentAttendance).filter(
+            StudentAttendance.student_id == str(student.id)
+        ).order_by(desc(StudentAttendance.created_at)).limit(40).all()
+
+        total_sessions = len(att_rows)
+        attended_sessions = len([a for a in att_rows if a.status and a.status.lower() in ("present", "attended")])
+        calculated_att_rate = round((attended_sessions / total_sessions) * 100, 1) if total_sessions > 0 else None
+
         student_data = {
             "id": str(student.id),
             "name": f"Cadet {student.first_name} {student.last_name}",
             "rollNumber": student.student_code,
-            "computerNumber": custom_fields.get("computerNumber", "C-09827341"),
+            "computerNumber": custom_fields.get("computerNumber", "Pending DGCA Allocation"),
             "batchId": "BATCH-DELTA-26",
             "batchName": batch_name,
             "program": admission.course_name if admission else "DGCA CPL Ground School",
             "centre": custom_fields.get("centre", "Dwarka Centre, New Delhi"),
-            "avatarUrl": custom_fields.get("avatarUrl", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80"),
-            "attendanceRate": float(custom_fields.get("attendanceRate", 88.5)),
-            "totalClasses": int(custom_fields.get("totalClasses", 122)),
-            "attendedClasses": int(custom_fields.get("attendedClasses", 108)),
-            "pendingFee": float(admission.fee_balance) if admission else 35000.0,
-            "totalFee": float(admission.fee_final) if admission else 185000.0,
-            "paidFee": float(admission.fee_paid) if admission else 150000.0,
-            "dgcaExamSession": admission_meta.get("dgca_exam_session", "DGCA CPL Session 3/2026"),
+            "avatarUrl": custom_fields.get("avatarUrl", ""),
+            "attendanceRate": float(calculated_att_rate if calculated_att_rate is not None else custom_fields.get("attendanceRate", 0.0)),
+            "totalClasses": int(total_sessions if total_sessions > 0 else custom_fields.get("totalClasses", 0)),
+            "attendedClasses": int(attended_sessions if total_sessions > 0 else custom_fields.get("attendedClasses", 0)),
+            "pendingFee": float(admission.fee_balance) if (admission and admission.fee_balance is not None) else 0.0,
+            "totalFee": float(admission.fee_final) if (admission and admission.fee_final is not None) else 0.0,
+            "paidFee": float(admission.fee_paid) if (admission and admission.fee_paid is not None) else 0.0,
+            "dgcaExamSession": admission_meta.get("dgca_exam_session", "DGCA CPL Session 2026"),
         }
 
         timetable_data = [
@@ -815,6 +836,27 @@ def get_student_dashboard_from_admin_db(student_code: str = DEFAULT_STUDENT_CODE
         ]
 
         courses_data = admission_meta.get("enrolled_courses", [])
+        if not courses_data:
+            try:
+                lms_courses = session.query(LmsCourse).filter(LmsCourse.is_published == True).all()
+                for lc in lms_courses:
+                    courses_data.append({
+                        "id": str(lc.id),
+                        "code": lc.slug.upper().replace("-", " ")[:6] if lc.slug else "DGCA",
+                        "name": lc.title,
+                        "instructor": "Capt. Navrang Singh",
+                        "progress": 0,
+                        "completedLectures": 0,
+                        "totalLectures": 30,
+                        "nextMockExam": "DGCA Internal Mock #1",
+                        "dgcaPassingMarks": 70,
+                        "averageScore": 0,
+                        "syllabusTopics": [],
+                        "handoutsCount": 0,
+                        "category": "Ground School",
+                    })
+            except Exception as e:
+                logger.debug("LmsCourse fallback query: %s", e)
 
         transactions_data = [
             {
@@ -888,6 +930,28 @@ def get_student_dashboard_from_admin_db(student_code: str = DEFAULT_STUDENT_CODE
         except Exception as e:
             logger.debug("LmsCertificate query fallback: %s", e)
 
+        batchmates = []
+        try:
+            roster = session.query(Student).filter(
+                Student.status == "ACTIVE"
+            ).order_by(Student.student_code.asc()).limit(25).all()
+            for idx, r in enumerate(roster):
+                r_cust = dict(r.custom_fields or {})
+                batchmates.append({
+                    "id": f"BM-{str(r.id)[:8]}",
+                    "studentCode": r.student_code,
+                    "name": f"{r.first_name} {r.last_name}",
+                    "callsign": f"Cadet Delta-{idx+1:02d}",
+                    "avatar": r_cust.get("avatarUrl", f"https://api.dicebear.com/7.x/initials/svg?seed={r.first_name}+{r.last_name}"),
+                    "attendance": float(r_cust.get("attendanceRate", 85.0)),
+                    "dgcaStatus": "Clear" if float(r_cust.get("attendanceRate", 85.0)) >= 80 else "Review",
+                    "role": r_cust.get("role", "Cadet Pilot"),
+                    "bio": f"Cadet training for DGCA Commercial Pilot License (CPL). Cohort Batch {batch_name}.",
+                    "studySubjects": ["Air Navigation", "Meteorology", "Air Regulations"],
+                })
+        except Exception as e:
+            logger.warning("Could not fetch roster batchmates: %s", e)
+
         return {
             "student": student_data,
             "timetable": timetable_data,
@@ -895,6 +959,7 @@ def get_student_dashboard_from_admin_db(student_code: str = DEFAULT_STUDENT_CODE
             "transactions": transactions_data,
             "attendanceRecords": attendance_records,
             "certificates": certificates_data,
+            "batchmates": batchmates,
             "leaveRequests": leave_requests,
             "attendanceMarkedToday": bool(today_att),
             "cloudDatabase": "Google Cloud SQL (airbornedb) on GCR airborne-admin",

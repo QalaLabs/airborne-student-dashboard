@@ -3,13 +3,10 @@ import {
   BookOpen, 
   CheckCircle2, 
   Download, 
-  ChevronRight, 
   Play, 
   X,
   HelpCircle,
   Award,
-  AlertCircle,
-  FileQuestion,
   RefreshCw,
   ZoomIn
 } from 'lucide-react';
@@ -139,7 +136,7 @@ const mockQuizQuestions: QuizQuestion[] = [
 export const CoursesSection: React.FC<CoursesSectionProps> = ({
   courses,
   studentCode,
-  onOpenChat,
+  onOpenChat: _onOpenChat,
 }) => {
   const [liveLmsCourses, setLiveLmsCourses] = useState<LiveLmsCourse[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<CourseModule | null>(null);

@@ -41,35 +41,55 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'DGCA Session 3/2026 Portal',
-      desc: 'Pariksha portal opens 5th Nov. Submit your medical clearance certificate.',
-      time: '15m ago',
-      unread: true,
-    },
-    {
-      id: 2,
-      title: 'Meteorology Mock Exam #4',
-      desc: 'Scheduled for Sunday at 10:00 AM (Dwarka Main Hall).',
-      time: '2h ago',
-      unread: true,
-    },
-    {
-      id: 3,
-      title: 'Fee Installment Reminder',
-      desc: 'Final installment of ₹35,000 due by 15th Nov 2026.',
-      time: '1d ago',
-      unread: false,
-    }
-  ]);
+  const notifications = React.useMemo(() => {
+    const list = [
+      {
+        id: 1,
+        title: 'DGCA Exam Portal Notice',
+        desc: 'Pariksha portal verification active. Submit your medical clearance certificate.',
+        time: '15m ago',
+        unread: true,
+      },
+      {
+        id: 2,
+        title: 'DGCA Theory Mock Exam',
+        desc: 'Ground school internal mock drills available in Ground Courses tab.',
+        time: '2h ago',
+        unread: false,
+      },
+    ];
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+    if (student.pendingFee > 0) {
+      list.push({
+        id: 3,
+        title: 'Fee Installment Notice',
+        desc: `Outstanding tuition balance of ₹${student.pendingFee.toLocaleString('en-IN')} pending clearance.`,
+        time: '1d ago',
+        unread: true,
+      });
+    }
+
+    if (student.attendanceRate < 80.0 && student.totalClasses > 0) {
+      list.unshift({
+        id: 4,
+        title: 'DGCA Attendance Warning',
+        desc: `Current attendance is ${student.attendanceRate}% (below mandatory 80% DGCA cutoff).`,
+        time: 'Priority',
+        unread: true,
+      });
+    }
+
+    return list;
+  }, [student.pendingFee, student.attendanceRate, student.totalClasses]);
+
+  const [readIds, setReadIds] = useState<number[]>([]);
+  const unreadCount = notifications.filter(n => (n.unread && !readIds.includes(n.id)) && !readIds.includes(n.id)).length;
 
   const markAllRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, unread: false })));
+    setReadIds(notifications.map(n => n.id));
   };
+
+
 
   const isAdmin = currentUser?.role === 'admin';
 
@@ -218,11 +238,11 @@ export const Header: React.FC<HeaderProps> = ({
                   {notifications.map((n) => (
                     <div 
                       key={n.id} 
-                      className={`p-3.5 hover:bg-[#F5F6F8] transition-colors ${n.unread ? 'bg-slate-50' : ''}`}
+                      className={`p-3.5 hover:bg-[#F5F6F8] transition-colors ${(n.unread && !readIds.includes(n.id)) ? 'bg-slate-50' : ''}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="text-xs font-bold text-[#00274C] font-brand-primary flex items-center gap-1.5">
-                          {n.unread && <span className="w-2 h-2 rounded-full bg-[#DB241E]"></span>}
+                          {(n.unread && !readIds.includes(n.id)) && <span className="w-2 h-2 rounded-full bg-[#DB241E]"></span>}
                           {n.title}
                         </h4>
                         <span className="text-[10px] text-slate-400 whitespace-nowrap font-flight-mono">{n.time}</span>

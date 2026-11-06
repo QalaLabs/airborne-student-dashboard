@@ -36,12 +36,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setPassword('');
   };
 
-  const handleQuickFill = (role: UserRole, id: string, pass: string) => {
-    setSelectedRole(role);
-    setIdentifier(id);
-    setPassword(pass);
-    setErrorMsg(null);
-  };
+
 
 
   const executeLogin = async (roleToUse: UserRole, idToUse: string, passToUse: string) => {
@@ -329,52 +324,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 )}
               </button>
 
-              {/* Local / demo credentials */}
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-600 space-y-1.5">
+              {/* Official Academy Cadet Assistance Notice */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-3 text-[11px] text-slate-600 space-y-1">
                 <div className="flex items-center justify-between">
-                  <p className="font-bold uppercase tracking-wider text-slate-700">Pre-configured Demo Credentials</p>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-200">
-                    Live Database Verified
+                  <p className="font-bold uppercase tracking-wider text-slate-700 font-brand-primary">Official Portal Access</p>
+                  <span className="text-[10px] text-[#00274C] bg-white px-2 py-0.5 rounded font-bold border border-slate-200 font-flight-mono">
+                    Airborne DGCA LMS
                   </span>
                 </div>
-                {selectedRole === 'student' ? (
-                  <div className="space-y-1">
-                    <p>
-                      <span className="font-semibold text-[#00274C]">Cadet 1 (Compliant):</span>{' '}
-                      <button 
-                        type="button" 
-                        onClick={() => handleQuickFill('student', 'AA-CPL-2026-084', 'cadet2026')}
-                        className="font-flight-mono text-[#00274C] hover:underline font-bold"
-                      >
-                        AA-CPL-2026-084
-                      </button>{' '}
-                      / PIN: <span className="font-flight-mono font-bold">cadet2026</span> (Cadet Ruzal, 88.5% Attn)
-                    </p>
-                    <p>
-                      <span className="font-semibold text-[#00274C]">Cadet 2 (DGCA Alert):</span>{' '}
-                      <button 
-                        type="button" 
-                        onClick={() => handleQuickFill('student', 'AA-CPL-2026-091', 'cadet2026')}
-                        className="font-flight-mono text-[#DB241E] hover:underline font-bold"
-                      >
-                        AA-CPL-2026-091
-                      </button>{' '}
-                      / PIN: <span className="font-flight-mono font-bold">cadet2026</span> (Cadet Rohan, 77.5% Attn)
-                    </p>
-                  </div>
-                ) : (
-                  <p>
-                    <span className="font-semibold text-[#00274C]">Admin Operations:</span>{' '}
-                    <button 
-                      type="button" 
-                      onClick={() => handleQuickFill('admin', 'admin@airborneaviation.in', 'admin2026')}
-                      className="font-flight-mono text-[#00274C] hover:underline font-bold"
-                    >
-                      admin@airborneaviation.in
-                    </button>{' '}
-                    / Passphrase: <span className="font-flight-mono font-bold">admin2026</span>
-                  </p>
-                )}
+                <p className="text-slate-500 leading-relaxed">
+                  Cadet Roll Number or registered email and temporary flight password are sent upon admission confirmation. For login assistance or credential reset, contact Academy Operations at <span className="font-semibold text-[#00274C]">+91 9953-777-320</span>.
+                </p>
               </div>
             </form>
           </div>

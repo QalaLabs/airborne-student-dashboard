@@ -153,7 +153,7 @@ export const AeroBotChat: React.FC<AeroBotChatProps> = ({
       const data = await apiFetch<any>('/api/v1/bot/query', {
         method: 'POST',
         body: JSON.stringify({
-          student_id: student.rollNumber || student.id || 'AA-CPL-2026-084',
+          student_id: student.rollNumber || student.id || '',
           message: query,
           history: messages.slice(-4).map(m => ({ sender: m.sender, text: m.text }))
         })

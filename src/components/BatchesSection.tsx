@@ -16,20 +16,31 @@ import { BatchInfo } from '../types/dashboard';
 
 interface BatchesSectionProps {
   batch: BatchInfo;
+  currentStudentRollNumber?: string;
   onOpenChat: (prompt: string) => void;
 }
 
 export const BatchesSection: React.FC<BatchesSectionProps> = ({
   batch,
+  currentStudentRollNumber,
   onOpenChat,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBatchmate, setSelectedBatchmate] = useState<any | null>(null);
 
-  const filteredBatchmates = batch.batchmates.filter(b => 
-    b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.callsign.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredBatchmates = (batch.batchmates || [])
+    .filter(b => 
+      b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.callsign.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .map(b => {
+      const cleanName = b.name.replace(/\s*\(You\)$/i, '');
+      const isYou = currentStudentRollNumber && (b.studentCode === currentStudentRollNumber || cleanName.toLowerCase().includes(currentStudentRollNumber.toLowerCase()));
+      return {
+        ...b,
+        name: isYou ? `${cleanName} (You)` : cleanName,
+      };
+    });
 
   return (
     <div className="space-y-6">
@@ -231,8 +242,17 @@ export const BatchesSection: React.FC<BatchesSectionProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {filteredBatchmates.map((bm) => (
+        {filteredBatchmates.length === 0 ? (
+          <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50 space-y-2">
+            <Users className="w-8 h-8 text-slate-400 mx-auto opacity-60" />
+            <p className="text-sm font-bold text-[#00274C] font-brand-primary">Cohort Roster Allocation in Progress</p>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              Enrolled cadets assigned to this cohort batch will appear here once cohort verification is completed by Academy Operations.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {filteredBatchmates.map((bm) => (
             <div 
               key={bm.id}
               onClick={() => setSelectedBatchmate(bm)}
@@ -265,7 +285,8 @@ export const BatchesSection: React.FC<BatchesSectionProps> = ({
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Selected Batchmate Modal */}

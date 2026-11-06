@@ -98,7 +98,7 @@ export const CockpitHudOverview: React.FC<CockpitHudOverviewProps> = ({
 
   const syllabusAvg = courses.length > 0 
     ? Math.round(courses.reduce((acc, c) => acc + c.progress, 0) / courses.length) 
-    : 81;
+    : 0;
 
   return (
     <div className="space-y-6">

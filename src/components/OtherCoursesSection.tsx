@@ -39,7 +39,7 @@ export const OtherCoursesSection: React.FC<OtherCoursesSectionProps> = ({
   const handleSubmitInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const code = student.rollNumber || 'AA-CPL-2026-084';
+      const code = student.rollNumber || student.id || '';
       await apiFetch('/api/v1/activity/log', {
         method: 'POST',
         body: JSON.stringify({

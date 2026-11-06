@@ -161,7 +161,7 @@ export const AeroBotIcon: React.FC<AeroBotIconProps> = ({
       {/* Subtle Ambient Pulse Ring if active */}
       {active && (
         <span
-          className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping pointer-events-none"
+          className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 pointer-events-none"
           aria-hidden="true"
         />
       )}

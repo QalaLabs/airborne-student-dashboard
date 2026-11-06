@@ -88,14 +88,38 @@ This project strictly implements the **Airborne Aviation Brand Book 2026**:
 
 ### Installation
 ```bash
-# Install frontend dependencies
+# Install frontend + Python deps
 npm install
+pip install -r requirements.txt
 
-# Run frontend development server
+# Option A — one-click local start (Windows)
+.\start-local.ps1
+
+# Option B — two terminals
+# Terminal 1: API on port 8080 (must match vite proxy)
+$env:DATABASE_URL="sqlite:///./airborne_students.db"
+$env:ENV="development"
+python -m uvicorn server.main:app --host 127.0.0.1 --port 8080 --reload
+
+# Terminal 2: Vite UI
 npm run dev
+```
 
-# Run backend API server
-uvicorn server.main:app --port 8000 --reload
+Open **http://127.0.0.1:5173/**
+
+### Demo login credentials
+| Role | Identifier | Password | Scenario / Note |
+|------|------------|----------|-----------------|
+| Cadet (Compliant) | `AA-CPL-2026-084` or `ruzal.dhral@airborneaviation.in` | `cadet2026` | 88.5% attendance, ₹35k due, DGCA exam ready |
+| Cadet (DGCA Warning) | `AA-CPL-2026-091` or `rohan.sengupta@airborneaviation.in` | `cadet2026` | 77.5% attendance (<80% threshold warning test) |
+| Operations Admin | `admin@airborneaviation.in` | `admin2026` | Capt. Navrang Singh (Academy Operations Deck) |
+
+> Login works seamlessly against the FastAPI backend on **port 8080** (or offline fallback). The Vite proxy forwards `/api` → `http://localhost:8080`.
+
+### Automated Production API Test Suite
+```bash
+# Run comprehensive 14-point API verification suite
+python test_production_api.py
 ```
 
 ### Build & Lint
@@ -103,7 +127,7 @@ uvicorn server.main:app --port 8000 --reload
 # Type check and build production bundle
 npm run build
 
-# Run fast linter
+# Run fast linter (Oxlint)
 npm run lint
 ```
 

@@ -1,3 +1,4 @@
+import { apiFetch } from '../lib/api';
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, 
@@ -149,9 +150,8 @@ export const AeroBotChat: React.FC<AeroBotChatProps> = ({
 
     try {
       // 1. Call AeroBot directly on the local backend
-      const response = await fetch('/api/v1/bot/query', {
+      const data = await apiFetch<any>('/api/v1/bot/query', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           student_id: student.rollNumber || student.id || 'AA-CPL-2026-084',
           message: query,
@@ -159,16 +159,11 @@ export const AeroBotChat: React.FC<AeroBotChatProps> = ({
         })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        replyText = data.reply;
-        setBackendSource('AeroBot Copilot • Main Admin DB Synced');
-        suggestions = (data.chips && Array.isArray(data.chips) && data.chips.length > 0) 
-          ? data.chips 
-          : ['Explain QNH vs QFE', 'Check my fees', 'When is my next class?'];
-      } else {
-        throw new Error('Backend HTTP error');
-      }
+      replyText = data.reply;
+      setBackendSource('AeroBot Copilot • Main Admin DB Synced');
+      suggestions = (data.chips && Array.isArray(data.chips) && data.chips.length > 0) 
+        ? data.chips 
+        : ['Explain QNH vs QFE', 'Check my fees', 'When is my next class?'];
     } catch {
       // 2. Fallback to client AeroBot logic
       const fallback = generateLocalFallback(query);
@@ -207,12 +202,20 @@ export const AeroBotChat: React.FC<AeroBotChatProps> = ({
     ]);
   };
 
+  const handleSendRef = useRef(handleSend);
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  });
+
   useEffect(() => {
     if (initialPrompt) {
-      handleSend(initialPrompt);
-      if (onClearInitialPrompt) onClearInitialPrompt();
+      const timer = setTimeout(() => {
+        handleSendRef.current(initialPrompt);
+        onClearInitialPrompt?.();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [initialPrompt]);
+  }, [initialPrompt, onClearInitialPrompt]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-md flex flex-col h-[calc(100vh-170px)] min-h-[580px] overflow-hidden">

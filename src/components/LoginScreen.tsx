@@ -8,7 +8,10 @@ import {
   ArrowRight, 
   AlertCircle, 
   CloudSun,
-  Award
+  Award,
+  Eye,
+  EyeOff,
+  Zap
 } from 'lucide-react';
 import { AuthUser, UserRole } from '../types/dashboard';
 import { AirborneLogo } from './AirborneLogo';
@@ -21,6 +24,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [selectedRole, setSelectedRole] = useState<UserRole>('student');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -33,8 +37,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setPassword('');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleQuickFill = (role: UserRole, id: string, pass: string) => {
+    setSelectedRole(role);
+    setIdentifier(id);
+    setPassword(pass);
+    setErrorMsg(null);
+  };
+
+  const executeLogin = async (roleToUse: UserRole, idToUse: string, passToUse: string) => {
     setErrorMsg(null);
     setLoading(true);
 
@@ -43,16 +53,31 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          role: selectedRole,
-          identifier: identifier.trim(),
-          password: password.trim(),
+          role: roleToUse,
+          identifier: idToUse.trim(),
+          password: passToUse.trim(),
         }),
       });
 
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(
+          res.ok
+            ? 'Invalid response from Airborne Admin Server.'
+            : `Server error (${res.status}). Is the backend running on port 8080?`
+        );
+      }
 
       if (!res.ok || !data.success) {
-        throw new Error(data.detail || data.error || 'Authentication failed. Please verify credentials.');
+        const detail = data.detail ?? data.error;
+        const message = typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ')
+            : 'Authentication failed. Please verify credentials.';
+        throw new Error(message);
       }
 
       const authUser: AuthUser = {
@@ -75,19 +100,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeLogin(selectedRole, identifier, password);
+  };
+
   return (
     <div className="min-h-screen bg-[#00172E] text-white flex flex-col justify-between font-brand-body relative overflow-hidden">
       {/* Background Aeronautical Horizon & Radial Glow */}
       <div 
-        className="absolute inset-0 pointer-events-none opacity-20"
+        className="absolute inset-0 pointer-events-none opacity-40"
         style={{
           backgroundImage: `
-            radial-gradient(circle at 50% 20%, #DB241E 0%, transparent 45%),
-            radial-gradient(circle at 80% 80%, #00274C 0%, transparent 60%),
-            linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
+            linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)
           `,
-          backgroundSize: '100% 100%, 100% 100%, 48px 48px, 48px 48px'
+          backgroundSize: '32px 32px, 32px 32px'
         }}
       />
 
@@ -95,7 +123,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       <div className="relative z-10 bg-[#001224] border-b border-white/10 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-3 text-slate-300">
         <div className="flex items-center gap-2 overflow-hidden">
           <div className="flex items-center gap-1.5 text-[#D8A027] font-semibold tracking-wider font-flight-mono uppercase">
-            <CloudSun className="w-3.5 h-3.5 text-[#38bdf8] animate-pulse" />
+            <CloudSun className="w-3.5 h-3.5 text-slate-300" />
             <span>VIDP AIRPORT (DELHI):</span>
           </div>
           <span className="font-flight-mono text-slate-200">
@@ -105,7 +133,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
         <div className="flex items-center gap-4 text-[11px] font-flight-mono text-slate-400">
           <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="live-dot w-2 h-2 rounded-full bg-emerald-400" />
             <span className="text-emerald-400 font-semibold">DGCA Live DB Synced</span>
           </span>
           <span className="hidden sm:inline">•</span>
@@ -117,8 +145,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="w-full max-w-xl">
           {/* Header Brand Lockup */}
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center p-3 sm:p-4 rounded-2xl bg-[#00274C]/80 border border-white/15 shadow-2xl backdrop-blur-md mb-3">
+          <div className="text-center mb-5">
+            <div className="inline-flex items-center justify-center p-3 sm:p-4 rounded-2xl bg-[#00274C]/80 border border-white/15 shadow-2xl backdrop-blur-md mb-2.5">
               <AirborneLogo 
                 variant="full" 
                 theme="light" 
@@ -127,9 +155,54 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               />
             </div>
 
-            <p className="text-xs sm:text-sm text-slate-300 italic font-brand-body">
-              "From Dream to Cockpit" • DGCA Ground Training Flight Deck Portal
+            <p className="text-xs sm:text-sm text-slate-300 font-brand-body">
+              Dwarka ground school for DGCA CPL cadets
             </p>
+          </div>
+
+          {/* 1-Tap Quick Demo Switcher Bar */}
+          <div className="mb-4 bg-[#00274C]/60 backdrop-blur-md border border-white/15 p-2 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+            <span className="text-[11px] font-bold text-[#D8A027] uppercase tracking-wider flex items-center gap-1 shrink-0 px-2">
+              <Zap className="w-3.5 h-3.5 text-[#D8A027] fill-[#D8A027]" />
+              Quick Demo Access:
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  handleQuickFill('student', 'AA-CPL-2026-084', 'cadet2026');
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
+                title="Cadet Ruzal Dhral (88.5% DGCA Compliant)"
+              >
+                <Plane className="w-3 h-3 text-[#38bdf8]" />
+                <span>Cadet Ruzal (88.5%)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleQuickFill('student', 'AA-CPL-2026-091', 'cadet2026');
+                }}
+                className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900/60 text-red-200 text-[11px] font-medium border border-red-500/30 transition-all flex items-center gap-1 cursor-pointer"
+                title="Cadet Rohan Sengupta (77.5% Attendance Alert)"
+              >
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                <span>Cadet Rohan (&lt;80%)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleQuickFill('admin', 'admin@airborneaviation.in', 'admin2026');
+                }}
+                className="px-2.5 py-1 rounded-lg bg-[#D8A027]/20 hover:bg-[#D8A027]/30 text-[#D8A027] text-[11px] font-bold border border-[#D8A027]/40 transition-all flex items-center gap-1 cursor-pointer"
+                title="Operations Admin (Capt. Navrang Singh)"
+              >
+                <ShieldCheck className="w-3 h-3 text-[#D8A027]" />
+                <span>Admin Console</span>
+              </button>
+            </div>
           </div>
 
           {/* Authentication Card */}
@@ -205,7 +278,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               {/* Identifier Input */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 font-brand-primary">
-                  {selectedRole === 'student' ? 'Cadet Roll No / DGCA Computer No / Email' : 'Academy Administrator Email'}
+                  {selectedRole === 'student' ? 'Cadet Application No / Roll No / Computer No / Email' : 'Academy Administrator Email'}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -216,13 +289,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     required
-                    placeholder={selectedRole === 'student' ? 'e.g. AA-CPL-2026-084 or ruzal.dhral@airborneacademy.in' : 'e.g. admin@airborneaviation.in'}
+                    placeholder={selectedRole === 'student' ? 'e.g. APP-2026-00010, AA-CPL-2026-084, or ruzal.dhral@airborneaviation.in' : 'e.g. admin@airborneaviation.in'}
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-[#212121] font-flight-mono focus:bg-white focus:outline-hidden focus:border-[#00274C] focus:ring-2 focus:ring-[#00274C]/20 transition-all"
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
                   {selectedRole === 'student' 
-                    ? 'Use your DGCA Computer Number, Academy Roll Number, or registered email.'
+                    ? 'Use your Admission Application No (e.g. APP-2026-00010), DGCA Computer No, Roll No, or registered email.'
                     : 'Authorized Airborne Aviation Academy staff and flight operations credentials only.'}
                 </p>
               </div>
@@ -233,8 +306,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 font-brand-primary">
                     {selectedRole === 'student' ? 'Flight PIN / Password' : 'Admin Security Passphrase'}
                   </label>
-                  <span className="text-[11px] text-[#00274C] hover:underline cursor-pointer">
-                    Forgot Key?
+                  <span 
+                    onClick={() => {
+                      if (selectedRole === 'student') {
+                        setPassword('cadet2026');
+                      } else {
+                        setPassword('admin2026');
+                      }
+                    }}
+                    className="text-[11px] text-[#00274C] hover:underline cursor-pointer font-medium"
+                    title="Insert default demo credential PIN"
+                  >
+                    Reset Demo PIN
                   </span>
                 </div>
                 <div className="relative">
@@ -242,13 +325,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     placeholder="••••••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-flight-mono focus:bg-white focus:outline-hidden focus:border-[#00274C] focus:ring-2 focus:ring-[#00274C]/20 transition-all"
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-flight-mono focus:bg-white focus:outline-hidden focus:border-[#00274C] focus:ring-2 focus:ring-[#00274C]/20 transition-all"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -288,6 +379,54 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   </>
                 )}
               </button>
+
+              {/* Local / demo credentials */}
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-600 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold uppercase tracking-wider text-slate-700">Pre-configured Demo Credentials</p>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-200">
+                    Live Database Verified
+                  </span>
+                </div>
+                {selectedRole === 'student' ? (
+                  <div className="space-y-1">
+                    <p>
+                      <span className="font-semibold text-[#00274C]">Cadet 1 (Compliant):</span>{' '}
+                      <button 
+                        type="button" 
+                        onClick={() => handleQuickFill('student', 'AA-CPL-2026-084', 'cadet2026')}
+                        className="font-flight-mono text-[#00274C] hover:underline font-bold"
+                      >
+                        AA-CPL-2026-084
+                      </button>{' '}
+                      / PIN: <span className="font-flight-mono font-bold">cadet2026</span> (Cadet Ruzal, 88.5% Attn)
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#00274C]">Cadet 2 (DGCA Alert):</span>{' '}
+                      <button 
+                        type="button" 
+                        onClick={() => handleQuickFill('student', 'AA-CPL-2026-091', 'cadet2026')}
+                        className="font-flight-mono text-[#DB241E] hover:underline font-bold"
+                      >
+                        AA-CPL-2026-091
+                      </button>{' '}
+                      / PIN: <span className="font-flight-mono font-bold">cadet2026</span> (Cadet Rohan, 77.5% Attn)
+                    </p>
+                  </div>
+                ) : (
+                  <p>
+                    <span className="font-semibold text-[#00274C]">Admin Operations:</span>{' '}
+                    <button 
+                      type="button" 
+                      onClick={() => handleQuickFill('admin', 'admin@airborneaviation.in', 'admin2026')}
+                      className="font-flight-mono text-[#00274C] hover:underline font-bold"
+                    >
+                      admin@airborneaviation.in
+                    </button>{' '}
+                    / Passphrase: <span className="font-flight-mono font-bold">admin2026</span>
+                  </p>
+                )}
+              </div>
             </form>
           </div>
 
@@ -300,13 +439,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               </span>
               <span>•</span>
               <span className="flex items-center gap-1.5">
-                <Award className="w-3.5 h-3.5 text-[#D8A027]" />
-                100% CPL Exam Success Record
+                <Award className="w-3.5 h-3.5 text-slate-400" />
+                Batch Delta-26, Dwarka
               </span>
               <span>•</span>
               <span className="flex items-center gap-1.5">
                 <Lock className="w-3.5 h-3.5 text-slate-300" />
-                Role-Based Access Control
+                Cadet and admin access
               </span>
             </div>
 

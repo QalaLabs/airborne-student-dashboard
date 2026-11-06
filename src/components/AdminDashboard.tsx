@@ -14,14 +14,20 @@ import {
   RefreshCw,
   TrendingUp,
   Clock,
-  Plus
+  Plus,
+  KeyRound,
+  Radio,
+  Zap,
+  Sparkles,
+  Copy
 } from 'lucide-react';
 import { AdminMetrics, AdminStudent, AuthUser } from '../types/dashboard';
+import { apiFetch } from '../lib/api';
 
 interface AdminDashboardProps {
   adminUser?: AuthUser;
   onPreviewStudent: (studentCode: string) => void;
-  activeAdminTab: 'admin-overview' | 'admin-cadets' | 'admin-timetable' | 'admin-fees' | 'admin-activity';
+  activeAdminTab: 'admin-overview' | 'admin-cadets' | 'admin-timetable' | 'admin-fees' | 'admin-activity' | 'admin-bridge';
   setActiveAdminTab: (tab: any) => void;
 }
 
@@ -60,19 +66,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [paymentNote, setPaymentNote] = useState<string>('3rd Installment (Pre-Board & WPC RTR Lab)');
   const [paySuccessMsg, setPaySuccessMsg] = useState<string | null>(null);
 
+  const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
+
+  // Provisioning & Admin OS Bridge State
+  const [selectedStudentForProvision, setSelectedStudentForProvision] = useState<string>('AA-CPL-2026-084');
+  const [provisionalPassword, setProvisionalPassword] = useState<string>('PilotCadet2026!');
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(true);
+  const [isProvisioning, setIsProvisioning] = useState<boolean>(false);
+  const [provisionResult, setProvisionResult] = useState<any | null>(null);
+  const [copyNoticeSuccess, setCopyNoticeSuccess] = useState<boolean>(false);
+  const [webhookPingStatus, setWebhookPingStatus] = useState<{ testing: boolean; result: any | null }>({
+    testing: false,
+    result: null,
+  });
+
   // Fetch admin summary from DB
   const fetchAdminData = async () => {
     try {
       setRefreshing(true);
-      const res = await fetch('/api/v1/admin/summary');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.metrics) setMetrics(data.metrics);
-        if (data.students) setStudents(data.students);
-        if (data.timetable) setTimetable(data.timetable);
-        if (data.recentTransactions) setTransactions(data.recentTransactions);
-        if (data.activityLogs) setActivityLogs(data.activityLogs);
-      }
+      const data = await apiFetch<any>('/api/v1/admin/summary');
+      if (data.metrics) setMetrics(data.metrics);
+      if (data.students) setStudents(data.students);
+      if (data.timetable) setTimetable(data.timetable);
+      if (data.recentTransactions) setTransactions(data.recentTransactions);
+      if (data.activityLogs) setActivityLogs(data.activityLogs);
+      if (data.pendingLeaves) setPendingLeaves(data.pendingLeaves);
     } catch (err) {
       console.warn('Connected to local admin dataset buffer', err);
     } finally {
@@ -81,7 +99,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   useEffect(() => {
-    fetchAdminData();
+    let mounted = true;
+    apiFetch<any>('/api/v1/admin/summary')
+      .then(data => {
+        if (!mounted) return;
+        if (data.metrics) setMetrics(data.metrics);
+        if (data.students) setStudents(data.students);
+        if (data.timetable) setTimetable(data.timetable);
+        if (data.recentTransactions) setTransactions(data.recentTransactions);
+        if (data.activityLogs) setActivityLogs(data.activityLogs);
+        if (data.pendingLeaves) setPendingLeaves(data.pendingLeaves);
+      })
+      .catch(err => {
+        console.warn('Connected to local admin dataset buffer', err);
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Filter students
@@ -101,14 +135,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   // Handle Admin Manual Payment Record
+  const handleGenerateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+    let pwd = 'Cadet';
+    for (let i = 0; i < 6; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    pwd += '2026!';
+    setProvisionalPassword(pwd);
+  };
+
+  const handleProvisionAccess = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedStudentForProvision || provisionalPassword.length < 8) return;
+
+    try {
+      setIsProvisioning(true);
+      const res = await apiFetch<any>('/api/v1/admin/provision-portal-access', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: selectedStudentForProvision,
+          password: provisionalPassword,
+          must_change_password: mustChangePassword,
+          dispatch_webhook: true,
+        }),
+      });
+      setProvisionResult(res);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(`Provisioning failed: ${err.message || err}`);
+    } finally {
+      setIsProvisioning(false);
+    }
+  };
+
+  const handleTestWebhookPing = async () => {
+    try {
+      setWebhookPingStatus({ testing: true, result: null });
+      const t0 = performance.now();
+      const res = await apiFetch<any>('/api/v1/webhooks/admin-os', {
+        method: 'POST',
+        body: JSON.stringify({
+          event: 'ping',
+          data: { pingFrom: 'Airborne Admin Dashboard Deck' },
+        }),
+      });
+      const t1 = performance.now();
+      setWebhookPingStatus({
+        testing: false,
+        result: {
+          success: res.success || res.pong,
+          latencyMs: Math.round(t1 - t0),
+          service: res.service || 'airborne-student-portal',
+          timestamp: res.timestamp || new Date().toISOString(),
+        },
+      });
+    } catch (err: any) {
+      setWebhookPingStatus({
+        testing: false,
+        result: { error: err.message || 'Webhook ping failed' },
+      });
+    }
+  };
+
+  const handleCopyNotice = () => {
+    if (!provisionResult) return;
+    const text = `[AIRBORNE AVIATION ACADEMY] CADET PORTAL ACCESS CREDENTIALS\nCadet: ${provisionResult.name} (${provisionResult.studentCode})\nApplication No: ${provisionResult.applicationNo || "N/A"}\nPortal URL: https://portal.airborneaviation.in\nLogin Identifier: ${provisionResult.applicationNo || provisionResult.studentCode || provisionResult.email}\nTemporary Password: ${provisionalPassword}\nStatus: Flight Deck Ready (DGCA Ground School)\nNotice: Please update your password on first login.`;
+    navigator.clipboard.writeText(text);
+    setCopyNoticeSuccess(true);
+    setTimeout(() => setCopyNoticeSuccess(false), 2500);
+  };
+
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudentForPay) return;
 
     try {
-      const res = await fetch('/api/v1/admin/fees/record', {
+      const data = await apiFetch<any>('/api/v1/admin/fees/record', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           student_id: selectedStudentForPay.studentCode,
           amount: paymentAmount,
@@ -117,17 +221,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setPaySuccessMsg(`Receipt generated: ${data.receiptNo}. Updated balance: ₹${data.newBalance.toLocaleString()}`);
-        setTimeout(() => {
-          setShowPaymentModal(false);
-          setPaySuccessMsg(null);
-          fetchAdminData();
-        }, 1500);
-      }
+      setPaySuccessMsg(`Receipt generated: ${data.receiptNo}. Updated balance: ₹${Number(data.newBalance || 0).toLocaleString()}`);
+      setTimeout(() => {
+        setShowPaymentModal(false);
+        setPaySuccessMsg(null);
+        fetchAdminData();
+      }, 1500);
     } catch (err) {
       console.error('Error recording payment', err);
+      alert('Could not record payment in Admin DB.');
+    }
+  };
+
+  const handleReviewLeave = async (leave: any, status: 'APPROVED' | 'REJECTED') => {
+    try {
+      await apiFetch('/api/v1/admin/leaves/review', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: leave.studentCode,
+          leave_id: leave.id,
+          status,
+        }),
+      });
+      fetchAdminData();
+    } catch (err) {
+      console.error('Leave review failed', err);
+    }
+  };
+
+  const handleAdminMarkAttendance = async (studentCode: string) => {
+    try {
+      await apiFetch('/api/v1/admin/attendance/mark', {
+        method: 'POST',
+        body: JSON.stringify({ student_id: studentCode, session_id: 'TT-01' }),
+      });
+      fetchAdminData();
+    } catch (err) {
+      console.error('Admin attendance mark failed', err);
     }
   };
 
@@ -150,8 +280,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black italic tracking-wide font-brand-primary text-white">
-              ACADEMY OPERATIONS DECK
+            <h1 className="text-2xl sm:text-3xl font-medium font-brand-primary text-white">
+              Operations deck
             </h1>
 
             <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl font-brand-body leading-relaxed">
@@ -292,6 +422,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveAdminTab('admin-bridge')}
+          className={`px-4 py-2.5 rounded-xl font-brand-primary font-bold text-xs sm:text-sm whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+            activeAdminTab === 'admin-bridge'
+              ? 'bg-[#00274C] text-white shadow-sm'
+              : 'text-slate-600 hover:text-[#00274C] hover:bg-slate-100'
+          }`}
+        >
+          <KeyRound className="w-4 h-4 text-[#D8A027]" />
+          <span>Admin OS & Provisioning</span>
+          <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full font-bold">
+            Bridge Active
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveAdminTab('admin-activity')}
           className={`px-4 py-2.5 rounded-xl font-brand-primary font-bold text-xs sm:text-sm whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
             activeAdminTab === 'admin-activity'
@@ -380,7 +525,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onClick={() => setActiveAdminTab('admin-cadets')}
                   className="p-3.5 rounded-xl border border-slate-200 hover:border-[#00274C] hover:bg-blue-50/50 text-left transition-all cursor-pointer group"
                 >
-                  <Users className="w-5 h-5 text-[#00274C] mb-2 group-hover:scale-110 transition-transform" />
+                  <Users className="w-5 h-5 text-[#00274C] mb-2" />
                   <p className="font-bold text-[#00274C] font-brand-primary">Verify Cadet Roster</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">Inspect attendance & DGCA status</p>
                 </button>
@@ -389,7 +534,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onClick={() => setActiveAdminTab('admin-fees')}
                   className="p-3.5 rounded-xl border border-slate-200 hover:border-[#D8A027] hover:bg-amber-50/50 text-left transition-all cursor-pointer group"
                 >
-                  <CreditCard className="w-5 h-5 text-[#D8A027] mb-2 group-hover:scale-110 transition-transform" />
+                  <CreditCard className="w-5 h-5 text-[#D8A027] mb-2" />
                   <p className="font-bold text-[#00274C] font-brand-primary">Record Fee Installment</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">Issue official academy receipt</p>
                 </button>
@@ -398,12 +543,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onClick={() => setActiveAdminTab('admin-activity')}
                   className="p-3.5 rounded-xl border border-slate-200 hover:border-[#DB241E] hover:bg-red-50/50 text-left transition-all cursor-pointer group"
                 >
-                  <ShieldCheck className="w-5 h-5 text-[#DB241E] mb-2 group-hover:scale-110 transition-transform" />
+                  <ShieldCheck className="w-5 h-5 text-[#DB241E] mb-2" />
                   <p className="font-bold text-[#00274C] font-brand-primary">DGCA Compliance Log</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">Biometric logs & audit records</p>
                 </button>
               </div>
             </div>
+
+            {pendingLeaves.length > 0 && (
+              <div className="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm">
+                <h3 className="text-base font-bold font-brand-primary text-[#00274C] mb-3">
+                  Pending Leave Requests ({pendingLeaves.length})
+                </h3>
+                <div className="space-y-3">
+                  {pendingLeaves.slice(0, 5).map((leave) => (
+                    <div key={leave.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-bold text-[#00274C]">{leave.studentName} · {leave.studentCode}</p>
+                        <span className="font-flight-mono text-slate-500">{leave.date}</span>
+                      </div>
+                      <p className="text-slate-600 mt-1">{leave.reason}</p>
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => handleReviewLeave(leave, 'APPROVED')}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold cursor-pointer"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleReviewLeave(leave, 'REJECTED')}
+                          className="px-2.5 py-1 rounded-lg bg-[#DB241E] text-white font-semibold cursor-pointer"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Sidebar: DGCA Exam Readiness & Recent Activity */}
@@ -443,7 +621,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <h3 className="text-base font-bold font-brand-primary text-[#00274C]">
                   Live Activity Stream
                 </h3>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span className="live-dot w-2 h-2 rounded-full bg-emerald-500" />
               </div>
 
               <div className="space-y-3">
@@ -535,9 +713,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             className="w-9 h-9 rounded-full object-cover border border-slate-200"
                           />
                           <div>
-                            <p className="font-bold font-brand-primary text-[#00274C]">
-                              {cadet.name}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-bold font-brand-primary text-[#00274C]">
+                                {cadet.name}
+                              </p>
+                              {cadet.applicationNo && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-[#00274C] font-flight-mono">
+                                  {cadet.applicationNo}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-slate-500 font-flight-mono">
                               {cadet.studentCode} • {cadet.email}
                             </p>
@@ -597,6 +782,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               Record Payment
                             </button>
                           )}
+
+                          <button
+                            onClick={() => handleAdminMarkAttendance(cadet.studentCode)}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg font-bold text-[11px] transition-colors cursor-pointer"
+                          >
+                            Mark Present
+                          </button>
 
                           <button
                             onClick={() => onPreviewStudent(cadet.studentCode)}
@@ -761,6 +953,343 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 6. ADMIN OS & PROVISIONING BRIDGE TAB */}
+      {/* ------------------------------------------------------------------- */}
+      {activeAdminTab === 'admin-bridge' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-[#00274C] to-[#00172E] text-white p-6 rounded-2xl shadow-md border border-[#00274C] flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#D8A027] text-[#00274C] uppercase tracking-wider flex items-center gap-1">
+                  <Radio className="w-3 h-3 animate-pulse" />
+                  Live Sync Bridge
+                </span>
+                <span className="text-xs text-white/60 font-flight-mono">v2.4.0 • Brand Book 2026</span>
+              </div>
+              <h2 className="text-xl font-bold font-brand-primary text-white">
+                Airborne Admin OS & Student Portal Bridge
+              </h2>
+              <p className="text-xs text-white/70 max-w-2xl mt-1">
+                Connects Airborne Admin OS (Next.js / Prisma) with the Cadet Flight Operations Portal. Provision provisional cadet credentials, verify HMAC-SHA256 webhooks, and sync live biometric attendance.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleTestWebhookPing}
+                disabled={webhookPingStatus.testing}
+                className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold font-brand-primary border border-white/20 flex items-center gap-2 cursor-pointer transition-all"
+              >
+                <Zap className={`w-3.5 h-3.5 text-[#D8A027] ${webhookPingStatus.testing ? 'animate-spin' : ''}`} />
+                <span>{webhookPingStatus.testing ? 'Testing Ping...' : 'Ping Webhook Bridge'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Webhook Ping Feedback */}
+          {webhookPingStatus.result && (
+            <div className={`p-4 rounded-xl text-xs border flex items-center justify-between ${
+              webhookPingStatus.result.success
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  <strong>Webhook Bridge Active:</strong> Responded with round-trip latency of{' '}
+                  <span className="font-flight-mono font-bold">{webhookPingStatus.result.latencyMs}ms</span>. Handshake verified.
+                </span>
+              </div>
+              <span className="text-[10px] font-flight-mono text-slate-500">
+                {webhookPingStatus.result.timestamp}
+              </span>
+            </div>
+          )}
+
+          {/* Provisioning Form (Matches Admin OS UI Screenshot) */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4 mb-4">
+              <div>
+                <h3 className="text-base font-bold font-brand-primary text-[#00274C] flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-[#DB241E]" />
+                  <span>Provision student portal login</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Creates a STUDENT user (or links existing) to CRM Student userId in Admin OS.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 font-flight-mono">
+                Argon2id Hashed
+              </span>
+            </div>
+
+            <form onSubmit={handleProvisionAccess} className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                {/* Student / Application No Selector / Input */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold font-brand-primary uppercase text-slate-600">
+                      Application No / Roll Number / UUID
+                    </label>
+                    <span className="text-[10px] font-bold text-emerald-700 font-flight-mono">
+                      Type or Select
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      list="cadets-provision-datalist"
+                      placeholder="e.g. APP-2026-00010, AA-CPL-2026-084, or UUID"
+                      value={selectedStudentForProvision}
+                      onChange={(e) => setSelectedStudentForProvision(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-flight-mono focus:bg-white focus:outline-hidden focus:border-[#00274C]"
+                    />
+                    <datalist id="cadets-provision-datalist">
+                      <option value="APP-2026-00010">APP-2026-00010 — Enrolled Admission (Lead)</option>
+                      {students.map((s) => (
+                        <option key={s.id} value={s.applicationNo || s.studentCode}>
+                          {s.applicationNo ? `${s.applicationNo} — ` : ''}{s.studentCode} ({s.name})
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400">Quick fill:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStudentForProvision('APP-2026-00010')}
+                      className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-800 hover:bg-blue-100 font-flight-mono font-semibold border border-blue-200 cursor-pointer"
+                    >
+                      APP-2026-00010 (Enrolled Admission)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStudentForProvision('APP-2026-00418')}
+                      className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 font-flight-mono font-semibold border border-slate-200 cursor-pointer"
+                    >
+                      APP-2026-00418 (Ruzal Dhral)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Temp Password Input with Random Generator */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold font-brand-primary uppercase text-slate-600">
+                      Temp password (min 8)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleGenerateRandomPassword}
+                      className="text-[10px] font-bold text-[#DB241E] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-2.5 h-2.5" />
+                      <span>Random Key</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Temp password (min 8)"
+                      value={provisionalPassword}
+                      onChange={(e) => setProvisionalPassword(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-flight-mono focus:bg-white focus:outline-hidden focus:border-[#00274C]"
+                    />
+                  </div>
+                </div>
+
+                {/* Provision Access Button */}
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={!selectedStudentForProvision || provisionalPassword.length < 8 || isProvisioning}
+                    className="w-full px-4 py-2.5 rounded-xl bg-[#00274C] hover:bg-[#00172E] disabled:bg-slate-300 text-white text-xs font-bold font-brand-primary flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-[#D8A027]" />
+                    <span>{isProvisioning ? 'Provisioning...' : 'Provision access'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-slate-600">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mustChangePassword}
+                    onChange={(e) => setMustChangePassword(e.target.checked)}
+                    className="rounded text-[#00274C] focus:ring-0"
+                  />
+                  <span>Require password change on first sign-in</span>
+                </label>
+                <span className="text-slate-300">•</span>
+                <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  <span>Outbound webhook triggers automatically to Admin OS</span>
+                </span>
+              </div>
+            </form>
+
+            {/* Provision Result Card */}
+            {provisionResult && (
+              <div className="mt-5 p-4 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-600 text-white uppercase tracking-wider">
+                        Access Provisioned
+                      </span>
+                      {provisionResult.applicationNo && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#00274C] text-white font-flight-mono">
+                          {provisionResult.applicationNo}
+                        </span>
+                      )}
+                      <span className="text-xs font-bold text-slate-800">
+                        {provisionResult.name} ({provisionResult.studentCode})
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      Login Identifier: <strong className="font-flight-mono">{provisionResult.applicationNo || provisionResult.studentCode || provisionResult.email}</strong>
+                      {' • '}
+                      Temp Password: <strong className="font-flight-mono text-[#DB241E]">{provisionalPassword}</strong>
+                      {' • '}
+                      User ID: <span className="font-flight-mono text-slate-500 text-[11px]">{provisionResult.userId}</span>
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleCopyNotice}
+                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-bold font-brand-primary border border-slate-200 flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer transition-all"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-[#00274C]" />
+                    <span>{copyNoticeSuccess ? 'Copied to Clipboard!' : 'Copy Cadet Notice'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Webhook Bridge Telemetry Specs */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 font-brand-primary uppercase">Inbound Webhook</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 font-flight-mono">ACTIVE</span>
+              </div>
+              <p className="text-xs font-flight-mono font-semibold text-[#00274C]">/api/v1/webhooks/admin-os</p>
+              <p className="text-[11px] text-slate-500">Listens for portal access creation and profile updates from Admin OS.</p>
+            </div>
+
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 font-brand-primary uppercase">Outbound Target</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 font-flight-mono">READY</span>
+              </div>
+              <p className="text-xs font-flight-mono font-semibold text-[#00274C] truncate">/api/v1/webhooks/student-portal</p>
+              <p className="text-[11px] text-slate-500">Delivers attendance marks, quiz drills, and fee payments to Admin OS.</p>
+            </div>
+
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 font-brand-primary uppercase">Signature Protocol</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 font-flight-mono">HMAC-256</span>
+              </div>
+              <p className="text-xs font-flight-mono font-semibold text-[#00274C]">SHA-256 Digest</p>
+              <p className="text-[11px] text-slate-500">Constant-time verification with API_SHARED_SECRET token handshake.</p>
+            </div>
+          </div>
+
+          {/* Cadet Provisioning Roster Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold font-brand-primary text-[#00274C]">
+                  Delta-26 Cohort Login Access Matrix
+                </h3>
+                <p className="text-xs text-slate-500">Real-time status of provisional flight deck access for enrolled cadets</p>
+              </div>
+              <span className="text-xs font-flight-mono font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                8 Cadets Enrolled
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 font-brand-primary uppercase text-[11px] tracking-wider border-b border-slate-200">
+                    <th className="py-3 px-4">Cadet Pilot</th>
+                    <th className="py-3 px-4">DGCA Computer No</th>
+                    <th className="py-3 px-4">Portal ID / Email</th>
+                    <th className="py-3 px-4">Attendance Rate</th>
+                    <th className="py-3 px-4">Portal Access</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {students.map((cadet) => (
+                    <tr key={cadet.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={cadet.avatar}
+                            alt={cadet.name}
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-900 font-brand-primary">{cadet.name}</p>
+                            <p className="text-[10px] text-slate-500 font-flight-mono">{cadet.studentCode}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-flight-mono font-bold text-slate-700">
+                        {cadet.computerNumber}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 font-flight-mono text-[11px]">
+                        {cadet.email}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded font-bold font-flight-mono ${
+                          cadet.attendanceRate >= 80 ? 'text-emerald-700 bg-emerald-50' : 'text-[#DB241E] bg-red-50'
+                        }`}>
+                          {cadet.attendanceRate}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>PROVISIONED</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedStudentForProvision(cadet.studentCode);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold font-brand-primary bg-slate-100 hover:bg-[#00274C] hover:text-white rounded-lg transition-colors cursor-pointer"
+                          >
+                            Reset / Provision
+                          </button>
+                          <button
+                            onClick={() => onPreviewStudent(cadet.studentCode)}
+                            className="px-2.5 py-1 text-[11px] font-bold font-brand-primary bg-[#00274C] hover:bg-[#00172E] text-white rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Inspect</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

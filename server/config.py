@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 # Dynamic Port Binding for Cloud Run
 PORT = int(os.environ.get("PORT", os.environ.get("APP_PORT", 8080)))
@@ -8,12 +9,28 @@ GCP_PROJECT = os.environ.get("GCP_PROJECT", "airborne-aviation-505100")
 GCP_REGION = os.environ.get("GCP_REGION", "asia-south1")
 
 # Main GCR Admin Panel Cloud SQL Database Configuration
-# Primary: Google Cloud SQL (airborne-aviation-505100:asia-south1:airborne-db) injected via Cloud Run Secret Manager
 DEFAULT_PROD_DB_URL = os.environ.get(
     "PROD_DATABASE_URL",
-    "postgresql+psycopg2://airborne_app_user:phQ%5B%5E%2B4IfLEO%5B%7Dx9U%7B%23%3FK*TLD%3EcB%23JkA@34.93.180.179:5432/airbornedb?sslmode=require"
+    "postgresql+psycopg2://airborne_app_user:phQ%5B%5E%2B4IfLEO%5B%7Dx9U%7B%23%3FK*TLD%3EcB%23JkA@34.100.212.80:5432/airbornedb?sslmode=require"
 )
-DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_PROD_DB_URL)
+
+# Smart Database Resolution:
+# In Cloud Run (K_SERVICE is set) or when ENV == "production", use Cloud SQL.
+# Locally or when airborne_students.db exists, default to SQLite to avoid 15s connection timeouts.
+is_cloud_run = bool(os.environ.get("K_SERVICE") or os.environ.get("ENV") == "production")
+local_db_exists = (Path("airborne_students.db").exists() or Path("airborne-student-dashboard/airborne_students.db").exists())
+
+if os.environ.get("DATABASE_URL"):
+    DATABASE_URL = os.environ["DATABASE_URL"]
+elif is_cloud_run:
+    DATABASE_URL = DEFAULT_PROD_DB_URL
+elif local_db_exists or os.environ.get("ENV", "development") == "development":
+    sqlite_path = Path("airborne_students.db").resolve()
+    if not sqlite_path.exists() and Path("airborne-student-dashboard/airborne_students.db").exists():
+        sqlite_path = Path("airborne-student-dashboard/airborne_students.db").resolve()
+    DATABASE_URL = f"sqlite:///{sqlite_path.as_posix()}"
+else:
+    DATABASE_URL = DEFAULT_PROD_DB_URL
 
 # Main GCR Admin Panel URL & Org ID
 ORG_ID = os.environ.get("ORG_ID", "340e4b30-22bc-44f2-be56-85b061daaddd")

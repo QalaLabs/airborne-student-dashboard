@@ -8,14 +8,17 @@ import {
   X
 } from 'lucide-react';
 import { CourseModule } from '../types/dashboard';
+import { apiFetch } from '../lib/api';
 
 interface CoursesSectionProps {
   courses: CourseModule[];
+  studentCode?: string;
   onOpenChat: (prompt: string) => void;
 }
 
 interface QuizQuestion {
   question: string;
+  imageUrl?: string;
   options: string[];
   correctAnswer: number;
   explanation: string;
@@ -58,11 +61,36 @@ const mockQuizQuestions: QuizQuestion[] = [
     ],
     correctAnswer: 2,
     explanation: 'Class A airspace is strictly reserved for Instrument Flight Rules (IFR) traffic only; VFR flights are not permitted under any circumstances.',
+  },
+  {
+    subject: 'Technical General',
+    question: 'During cruise flight at 7,500 ft in a normally aspirated piston engine aircraft (e.g. Lycoming IO-360), leaning the mixture properly towards lean-of-peak (LOP) results in:',
+    options: [
+      'Increased cylinder head temperature (CHT) beyond redline',
+      'Lower fuel consumption and reduced cylinder head temperatures (CHT)',
+      'Immediate engine stoppage due to vapor lock',
+      'Rapid spark plug fouling and backfire'
+    ],
+    correctAnswer: 1,
+    explanation: 'Operating properly lean-of-peak (LOP) results in cooler cylinder head temperatures (CHT) and optimal fuel economy because peak internal cylinder pressure occurs later after top dead center.',
+  },
+  {
+    subject: 'Radio Telephony RTR(A)',
+    question: 'Under ITU and DGCA WPC radiotelephony regulations, what is the exact order of priority for aeronautical radio transmissions?',
+    options: [
+      'Direction finding, Distress (MAYDAY), Meteorological, Flight Safety',
+      'Distress (MAYDAY), Urgency (PAN-PAN), Direction Finding, Flight Safety',
+      'Urgency (PAN-PAN), Distress (MAYDAY), Flight Regularity, State aircraft',
+      'Flight Safety, Distress (MAYDAY), Meteorological, Commercial traffic'
+    ],
+    correctAnswer: 1,
+    explanation: 'Official ICAO Annex 10 & WPC precedence order: 1. Distress calls (MAYDAY), 2. Urgency messages (PAN-PAN), 3. Direction Finding, 4. Flight Safety, 5. Meteorological, 6. Flight Regularity messages.',
   }
 ];
 
 export const CoursesSection: React.FC<CoursesSectionProps> = ({
   courses,
+  studentCode,
   onOpenChat,
 }) => {
   const [selectedCourse, setSelectedCourse] = useState<CourseModule | null>(null);
@@ -72,12 +100,31 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [score, setScore] = useState(0);
 
-  const startQuiz = () => {
+  const [activeQuizQuestions, setActiveQuizQuestions] = useState<QuizQuestion[]>(mockQuizQuestions);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const startQuiz = async (course?: CourseModule) => {
     setCurrentQuizIdx(0);
     setSelectedAnswer(null);
     setQuizSubmitted(false);
     setScore(0);
+    setLoadingQuestions(true);
     setQuizOpen(true);
+
+    try {
+      const subjectName = course?.name || selectedCourse?.name || '';
+      const res = await apiFetch<QuizQuestion[]>(`/api/v1/lms/questions/practice?subject=${encodeURIComponent(subjectName)}`);
+      if (res && Array.isArray(res) && res.length > 0) {
+        setActiveQuizQuestions(res);
+      } else {
+        setActiveQuizQuestions(mockQuizQuestions);
+      }
+    } catch {
+      setActiveQuizQuestions(mockQuizQuestions);
+    } finally {
+      setLoadingQuestions(false);
+    }
   };
 
   const handleSelectOption = (idx: number) => {
@@ -88,7 +135,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
   const handleCheckAnswer = () => {
     if (selectedAnswer === null) return;
     setQuizSubmitted(true);
-    const q = mockQuizQuestions[currentQuizIdx];
+    const q = activeQuizQuestions[currentQuizIdx];
     const isCorrect = selectedAnswer === q.correctAnswer;
     const newScore = isCorrect ? score + 1 : score;
     if (isCorrect) {
@@ -97,15 +144,14 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
 
     // Persist mock exam activity directly into the Main GCR Admin Database
     try {
-      const studentCode = localStorage.getItem('airborne_student_id') || 'AA-CPL-2026-084';
-      fetch('/api/v1/quiz/submit', {
+      const code = studentCode || localStorage.getItem('airborne_student_id') || 'AA-CPL-2026-084';
+      apiFetch('/api/v1/quiz/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: studentCode,
+          student_id: code,
           subject: q.subject,
           score: newScore,
-          max_score: mockQuizQuestions.length,
+          max_score: activeQuizQuestions.length,
           answers: {
             question: q.question,
             selectedOption: q.options[selectedAnswer],
@@ -120,7 +166,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
   };
 
   const handleNextQuestion = () => {
-    if (currentQuizIdx < mockQuizQuestions.length - 1) {
+    if (currentQuizIdx < activeQuizQuestions.length - 1) {
       setCurrentQuizIdx(idx => idx + 1);
       setSelectedAnswer(null);
       setQuizSubmitted(false);
@@ -150,7 +196,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
 
         <div className="flex items-center gap-3">
           <button
-            onClick={startQuiz}
+            onClick={() => startQuiz()}
             className="px-4 py-2.5 rounded-xl bg-[#DB241E] hover:bg-[#b81d18] text-white text-xs font-bold font-brand-primary transition-all shadow-md flex items-center gap-2 active:scale-95 cursor-pointer"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
@@ -310,18 +356,27 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
               <button
                 onClick={() => {
                   try {
-                    const studentCode = localStorage.getItem('airborne_student_id') || 'AA-CPL-2026-084';
-                    fetch('/api/v1/activity/log', {
+                    const code = studentCode || localStorage.getItem('airborne_student_id') || 'AA-CPL-2026-084';
+                    apiFetch('/api/v1/activity/log', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        student_id: studentCode,
+                        student_id: code,
                         verb: 'study_material_downloaded',
                         activity_type: 'NOTE',
                         title: `Question Bank Accessed: ${selectedCourse.name}`,
                         notes: `Cadet downloaded complete DGCA theory question bank & lecture slides for ${selectedCourse.name} (${selectedCourse.code}).`
                       })
                     }).catch(err => console.warn('Activity sync error', err));
+
+                    apiFetch('/api/v1/course/progress', {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        student_id: code,
+                        course_name: selectedCourse.name,
+                        completed_lectures: Math.min(selectedCourse.completedLectures + 1, selectedCourse.totalLectures),
+                        total_lectures: selectedCourse.totalLectures,
+                      })
+                    }).catch(() => {});
                   } catch {}
                   alert(`Downloading complete syllabus book & handouts for ${selectedCourse.name}`);
                 }}
@@ -342,6 +397,22 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
         </div>
       )}
 
+
+      {/* Full Size Diagram Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl p-4 shadow-2xl">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-3 right-3 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img src={previewImage} alt="Diagram Full View" className="max-h-[80vh] w-auto mx-auto object-contain rounded-lg" />
+          </div>
+        </div>
+      )}
+
       {/* DGCA Practice Drill Quiz Modal */}
       {quizOpen && (
         <div className="fixed inset-0 z-50 bg-[#00172E]/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -349,10 +420,10 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <span className="bg-[#DB241E] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase font-flight-mono">
-                  Question {currentQuizIdx + 1} of {mockQuizQuestions.length}
+                  Question {currentQuizIdx + 1} of {activeQuizQuestions.length}
                 </span>
                 <span className="text-xs text-slate-500 font-semibold">
-                  {mockQuizQuestions[currentQuizIdx].subject}
+                  {activeQuizQuestions[currentQuizIdx].subject}
                 </span>
               </div>
               <button
@@ -366,14 +437,25 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
 
             <div className="mt-4">
               <h3 className="text-sm md:text-base font-bold text-[#00274C] font-brand-primary leading-relaxed">
-                {mockQuizQuestions[currentQuizIdx].question}
+                {activeQuizQuestions[currentQuizIdx].question}
               </h3>
+              {activeQuizQuestions[currentQuizIdx].imageUrl && (
+                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2 text-center">
+                  <img
+                    src={activeQuizQuestions[currentQuizIdx].imageUrl}
+                    alt="Question Diagram"
+                    onClick={() => setPreviewImage(activeQuizQuestions[currentQuizIdx].imageUrl || null)}
+                    className="mx-auto max-h-56 max-w-full rounded-lg object-contain cursor-zoom-in hover:opacity-95 transition-opacity"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500 italic">Click image to inspect full-size diagram / annex</p>
+                </div>
+              )}
 
               {/* Options */}
               <div className="mt-4 space-y-2.5">
-                {mockQuizQuestions[currentQuizIdx].options.map((option, optIdx) => {
+                {activeQuizQuestions[currentQuizIdx].options.map((option, optIdx) => {
                   const isSelected = selectedAnswer === optIdx;
-                  const isCorrect = optIdx === mockQuizQuestions[currentQuizIdx].correctAnswer;
+                  const isCorrect = optIdx === activeQuizQuestions[currentQuizIdx].correctAnswer;
                   
                   let optionClass = 'bg-[#F5F6F8] border-slate-200 text-slate-800 hover:bg-slate-100';
                   if (isSelected && !quizSubmitted) {
@@ -411,7 +493,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
                     Concept Clarity Breakdown (Capt. Navrang's Notes):
                   </div>
                   <p className="leading-relaxed pl-5">
-                    {mockQuizQuestions[currentQuizIdx].explanation}
+                    {activeQuizQuestions[currentQuizIdx].explanation}
                   </p>
                 </div>
               )}
@@ -420,7 +502,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
             {/* Quiz Controls */}
             <div className="mt-6 pt-3 border-t border-slate-100 flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">
-                Score: <strong className="text-emerald-600 font-flight-mono">{score}</strong> / {mockQuizQuestions.length}
+                Score: <strong className="text-emerald-600 font-flight-mono">{score}</strong> / {activeQuizQuestions.length}
               </span>
 
               <div className="flex gap-2">
@@ -432,7 +514,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
                   >
                     Lock Answer
                   </button>
-                ) : currentQuizIdx < mockQuizQuestions.length - 1 ? (
+                ) : currentQuizIdx < activeQuizQuestions.length - 1 ? (
                   <button
                     onClick={handleNextQuestion}
                     className="px-4 py-2 rounded-xl bg-[#DB241E] text-white text-xs font-bold font-brand-primary hover:bg-[#b81d18] cursor-pointer"
@@ -444,7 +526,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
                     onClick={() => setQuizOpen(false)}
                     className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
                   >
-                    Finish Drill ({score}/{mockQuizQuestions.length} Correct)
+                    Finish Drill ({score}/{activeQuizQuestions.length} Correct)
                   </button>
                 )}
               </div>

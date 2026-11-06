@@ -6,7 +6,6 @@ import {
   Menu, 
   X, 
   PhoneCall, 
-  CloudSun,
   LogOut,
   Eye,
   ArrowLeft
@@ -75,13 +74,13 @@ export const Header: React.FC<HeaderProps> = ({
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <header className="sticky top-0 z-40 bg-[#00274C] text-white border-b border-[#00172E] shadow-lg">
+    <header className="shrink-0 z-40 bg-[#00274C] text-white border-b border-[#00172E]">
       {/* Admin Preview Warning Banner */}
       {isAdminPreviewingStudent && (
         <div className="bg-[#D8A027] text-[#00274C] px-4 py-2 text-xs font-bold font-brand-primary flex items-center justify-between shadow-inner">
           <div className="flex items-center gap-2">
-            <Eye className="w-4 h-4 text-[#00274C] animate-bounce" />
-            <span>ADMIN PREVIEW: Viewing live Cadet Dashboard for {student.name} ({student.rollNumber})</span>
+            <Eye className="w-4 h-4 text-[#00274C]" />
+            <span>Preview of {student.name} ({student.rollNumber})</span>
           </div>
           {onReturnToAdminDeck && (
             <button
@@ -99,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="bg-[#00172E] px-4 py-1.5 text-xs border-b border-white/5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3 overflow-hidden text-slate-300">
           <div className="flex items-center gap-1.5 text-[#D8A027] font-semibold tracking-wider font-flight-mono uppercase">
-            <CloudSun className="w-3.5 h-3.5 animate-pulse text-[#38bdf8]" />
+            <span className="live-dot w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span>METAR VIDP (DELHI):</span>
           </div>
           <div className="font-flight-mono text-slate-200 truncate">
@@ -163,8 +162,8 @@ export const Header: React.FC<HeaderProps> = ({
             title="Connected to Cloud SQL PostgreSQL (airbornedb) on GCR airborne-admin"
             className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-[11px] font-mono cursor-default shadow-inner"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold">Main Admin DB Live</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span className="font-medium">Records synced</span>
           </div>
 
           {/* Quick Attendance Check-in for cadets */}

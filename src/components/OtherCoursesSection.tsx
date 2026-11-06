@@ -1,3 +1,4 @@
+import { apiFetch } from '../lib/api';
 import React, { useState } from 'react';
 import { 
   Plane, 
@@ -35,8 +36,23 @@ export const OtherCoursesSection: React.FC<OtherCoursesSectionProps> = ({
     ? courses 
     : courses.filter(c => c.category === selectedCategory);
 
-  const handleSubmitInquiry = (e: React.FormEvent) => {
+  const handleSubmitInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      const code = student.rollNumber || 'AA-CPL-2026-084';
+      await apiFetch('/api/v1/activity/log', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: code,
+          verb: 'program_inquiry_submitted',
+          activity_type: 'ADMISSION',
+          title: `Program Inquiry: ${inquiryCourse?.title || 'Advanced Course'}`,
+          notes: `Cadet submitted interest for ${inquiryCourse?.title} (${inquiryCourse?.code}). Contact: ${phoneInput}. Notes: ${notesInput}`
+        })
+      });
+    } catch (err) {
+      console.warn('Inquiry activity log error', err);
+    }
     setInquirySubmitted(true);
   };
 
@@ -50,7 +66,7 @@ export const OtherCoursesSection: React.FC<OtherCoursesSectionProps> = ({
               Airborne Aviation Academy
             </span>
             <span className="bg-[#D8A027] text-[#00274C] text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              100% Exam Success Rate
+              Extra ratings after CPL ground school
             </span>
             <span className="bg-white/10 text-slate-300 text-[11px] px-2.5 py-0.5 rounded-full font-flight-mono border border-white/10">
               "From Dream to Cockpit"

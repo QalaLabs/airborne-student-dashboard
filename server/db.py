@@ -1,16 +1,19 @@
 import os
 import json
 import uuid
+import hashlib
+import hmac
 import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 from sqlalchemy import (
     create_engine, Column, String, Integer, Float, Boolean, Text, 
-    DateTime, Numeric, ForeignKey, JSON, BigInteger, Uuid, desc, text
+    DateTime, Numeric, ForeignKey, JSON, BigInteger, Uuid, desc, text, func
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from server.config import DATABASE_URL, ORG_ID
+from server.auth import create_access_token
 
 logger = logging.getLogger("airborne.db")
 
@@ -42,6 +45,42 @@ Base = declarative_base()
 # ==============================================================================
 # MAIN GCR BUILD OF AIRBORNE ADMIN PANEL COMPATIBLE SCHEMAS
 # ==============================================================================
+
+class User(Base):
+    """Airborne Admin: users table"""
+    __tablename__ = "users"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
+    campus_id = Column("campusId", Uuid(as_uuid=True), nullable=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False)
+    phone = Column(String(20), nullable=True)
+    password_hash = Column("passwordHash", String(255), nullable=True)
+    role = Column(String(50), default="STUDENT")
+    avatar_url = Column("avatarUrl", Text, nullable=True)
+    is_active = Column("isActive", Boolean, default=True)
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("updatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column("deletedAt", DateTime, nullable=True)
+
+class Lead(Base):
+    """Airborne Admin: leads table"""
+    __tablename__ = "leads"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
+    campus_id = Column("campusId", Uuid(as_uuid=True), nullable=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    phone = Column(String(20), nullable=False)
+    city = Column(String(100), nullable=True)
+    state = Column(String(100), nullable=True)
+    status = Column(String(50), default="ACTIVE")
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("updatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column("deletedAt", DateTime, nullable=True)
+
 
 class Student(Base):
     """Airborne Admin: students table"""
@@ -157,7 +196,8 @@ class EventLog(Base):
     """Airborne Admin: event_log table (Enterprise Event Stream)"""
     __tablename__ = "event_log"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # Integer PK for SQLite autoincrement compatibility (Postgres accepts Integer too)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
     event_name = Column("eventName", String(255), nullable=False)
     actor_id = Column("actorId", Uuid(as_uuid=True), nullable=True)
@@ -171,7 +211,8 @@ class AuditLog(Base):
     """Airborne Admin: audit_logs table (Compliance & Change Logs)"""
     __tablename__ = "audit_logs"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # Integer PK for SQLite autoincrement compatibility (Postgres accepts Integer too)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
     user_id = Column("userId", Uuid(as_uuid=True), nullable=True)
     action = Column(String(100), nullable=False)
@@ -180,6 +221,157 @@ class AuditLog(Base):
     old_value = Column("oldValue", JSON, default={})
     new_value = Column("newValue", JSON, default={})
     occurred_at = Column("occurredAt", DateTime, default=datetime.utcnow)
+
+
+class LmsCourse(Base):
+    """Airborne Admin: lms_courses table"""
+    __tablename__ = "lms_courses"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
+    slug = Column(String(255), nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), default="PUBLISHED")
+    is_published = Column("isPublished", Boolean, default=True)
+    metadata_json = Column("metadata", JSON, default={})
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("updatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LmsStage(Base):
+    """Airborne Admin: lms_stages table"""
+    __tablename__ = "lms_stages"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id = Column("courseId", Uuid(as_uuid=True), nullable=False)
+    title = Column(String(255), nullable=False)
+    order = Column(Integer, default=0)
+
+class LmsModule(Base):
+    """Airborne Admin: lms_modules table"""
+    __tablename__ = "lms_modules"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    stage_id = Column("stageId", Uuid(as_uuid=True), nullable=True)
+    title = Column(String(255), nullable=False)
+    order = Column(Integer, default=0)
+    pass_percent = Column("passPercent", Integer, default=70)
+    max_attempts = Column("maxAttempts", Integer, default=3)
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+
+class LmsChapter(Base):
+    """Airborne Admin: lms_chapters table"""
+    __tablename__ = "lms_chapters"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    module_id = Column("moduleId", Uuid(as_uuid=True), nullable=False)
+    title = Column(String(255), nullable=False)
+    order = Column(Integer, default=0)
+
+class LmsQuestion(Base):
+    """Airborne Admin: lms_questions table"""
+    __tablename__ = "lms_questions"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    module_id = Column("moduleId", Uuid(as_uuid=True), nullable=False)
+    chapter_id = Column("chapterId", Uuid(as_uuid=True), nullable=True)
+    stem = Column(Text, nullable=False)
+    image_url = Column("imageUrl", Text, nullable=True)
+    options = Column(JSON, default=[])
+    correct_option_id = Column("correctOptionId", String(50), nullable=False)
+    order = Column(Integer, default=0)
+    points = Column(Integer, default=1)
+    difficulty = Column(String(50), default="MEDIUM")
+    negative_points = Column("negativePoints", Integer, default=0)
+    explanation = Column(Text, nullable=True)
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("updatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class LmsBatch(Base):
+    """Airborne Admin: lms_batches table"""
+    __tablename__ = "lms_batches"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
+    course_id = Column("courseId", Uuid(as_uuid=True), nullable=False)
+    name = Column(String(255), nullable=False)
+    type = Column(String(50), default="CUSTOM")
+    start_date = Column("startDate", DateTime, nullable=True)
+    end_date = Column("endDate", DateTime, nullable=True)
+    capacity = Column(Integer, default=25)
+    metadata_json = Column("metadata", JSON, default={})
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("updatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class LmsBatchStudent(Base):
+    """Airborne Admin: lms_batch_students table"""
+    __tablename__ = "lms_batch_students"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    batch_id = Column("batchId", Uuid(as_uuid=True), nullable=False)
+    student_id = Column("studentId", Uuid(as_uuid=True), nullable=False)
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+
+class LmsBatchTeacher(Base):
+    """Airborne Admin: lms_batch_teachers table"""
+    __tablename__ = "lms_batch_teachers"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    batch_id = Column("batchId", Uuid(as_uuid=True), nullable=False)
+    teacher_id = Column("teacherId", Uuid(as_uuid=True), nullable=False)
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+
+class LmsTimetableSlot(Base):
+    """Airborne Admin: lms_timetable_slots table"""
+    __tablename__ = "lms_timetable_slots"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
+    batch_id = Column("batchId", Uuid(as_uuid=True), nullable=False)
+    course_id = Column("courseId", Uuid(as_uuid=True), nullable=True)
+    teacher_id = Column("teacherId", Uuid(as_uuid=True), nullable=True)
+    title = Column(String(255), nullable=False)
+    starts_at = Column("startsAt", DateTime, nullable=False)
+    ends_at = Column("endsAt", DateTime, nullable=False)
+    room = Column(String(100), nullable=True)
+    online_url = Column("onlineUrl", Text, nullable=True)
+    subject_tag = Column("subjectTag", String(100), nullable=True)
+    metadata_json = Column("metadata", JSON, default={})
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("updatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class LmsCertificate(Base):
+    """Airborne Admin: lms_certificates table"""
+    __tablename__ = "lms_certificates"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
+    student_id = Column("studentId", Uuid(as_uuid=True), nullable=False)
+    course_id = Column("courseId", Uuid(as_uuid=True), nullable=False)
+    certificate_no = Column("certificateNo", String(100), nullable=False)
+    verification_code = Column("verificationCode", String(100), nullable=True)
+    title = Column(String(255), nullable=False)
+    status = Column(String(50), default="ISSUED")
+    issued_at = Column("issuedAt", DateTime, nullable=True)
+    issued_by = Column("issuedBy", Uuid(as_uuid=True), nullable=True)
+    file_url = Column("fileUrl", Text, nullable=True)
+    metadata_json = Column("metadata", JSON, default={})
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("updatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class LmsAttendanceSession(Base):
+    """Airborne Admin: lms_attendance_sessions table"""
+    __tablename__ = "lms_attendance_sessions"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column("orgId", Uuid(as_uuid=True), nullable=False, default=lambda: uuid.UUID(ORG_ID))
+    course_id = Column("courseId", Uuid(as_uuid=True), nullable=True)
+    title = Column(String(255), nullable=False)
+    held_at = Column("heldAt", DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    created_at = Column("createdAt", DateTime, default=datetime.utcnow)
+    subject_tag = Column("subjectTag", String(100), nullable=True)
 
 class LmsQuizAttempt(Base):
     """Airborne Admin: lms_quiz_attempts table"""
@@ -464,13 +656,19 @@ def init_db():
     finally:
         session.close()
 
+    # Seed additional Delta-26 cadets for admin roster (idempotent)
+    try:
+        seed_additional_cohort_students()
+    except Exception as e:
+        logger.warning("Cohort bootstrap notice: %s", e)
+
 
 # ==============================================================================
 # PULL DATA FROM MAIN GCR ADMIN DATABASE
 # ==============================================================================
 
-def find_student(session, identifier: str) -> Optional[Student]:
-    """Safely retrieves a student by studentCode, UUID id, or email."""
+def find_student(session, identifier: str, fallback_default: bool = True) -> Optional[Student]:
+    """Safely retrieves a student by studentCode, UUID id, email, or application number."""
     if not identifier:
         return None
     ident = str(identifier).strip()
@@ -481,11 +679,68 @@ def find_student(session, identifier: str) -> Optional[Student]:
             return s
     except (ValueError, AttributeError):
         pass
-    s = session.query(Student).filter(Student.student_code == ident).first()
-    if not s:
-        s = session.query(Student).filter(Student.email == ident).first()
-    if not s:
-        # Fallback to default cadet
+
+    # 1. By student_code (exact or case-insensitive)
+    s = session.query(Student).filter(func.lower(Student.student_code) == ident.lower()).first()
+    if s:
+        return s
+
+    # 2. By student email
+    s = session.query(Student).filter(func.lower(Student.email) == ident.lower()).first()
+    if s:
+        return s
+
+    # 3. By admission application_no (e.g. APP-2026-00010, APP-2026-00418)
+    adm = session.query(Admission).filter(func.lower(Admission.application_no) == ident.lower()).first()
+    if adm:
+        if adm.student_id:
+            s = session.query(Student).filter(Student.id == adm.student_id).first()
+            if s:
+                return s
+        elif adm.lead_id:
+            # Student has admission application but student record not yet generated
+            # Automatically create student from lead so portal ID can be provisioned
+            lead = session.query(Lead).filter(Lead.id == adm.lead_id).first()
+            if lead:
+                now = datetime.utcnow()
+                app_digits = "".join([c for c in adm.application_no if c.isdigit()])[-4:] or "0100"
+                student_code = f"AA-CPL-{now.year}-{app_digits}"
+                name_parts = (lead.name or "Cadet Pilot").strip().split(None, 1)
+                first_name = name_parts[0] if len(name_parts) > 0 else "Cadet"
+                last_name = name_parts[1] if len(name_parts) > 1 else "Pilot"
+                cadet_email = lead.email or f"{student_code.lower()}@airborneaviation.in"
+
+                s = Student(
+                    id=uuid.uuid4(),
+                    org_id=adm.org_id,
+                    campus_id=adm.campus_id,
+                    lead_id=lead.id,
+                    student_code=student_code,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=cadet_email,
+                    phone=lead.phone or "+919876543000",
+                    status="ACTIVE",
+                    enrolled_at=now,
+                    created_at=now,
+                    updated_at=now,
+                    custom_fields={
+                        "applicationNo": adm.application_no,
+                        "computerNumber": f"C-{app_digits}981",
+                        "attendanceRate": 100.0,
+                        "totalClasses": 0,
+                        "attendedClasses": 0,
+                        "targetDgcaSession": f"DGCA CPL Session 3/{now.year}",
+                    }
+                )
+                session.add(s)
+                adm.student_id = s.id
+                adm.stage = "ENROLLED"
+                session.commit()
+                return s
+
+    if not s and fallback_default:
+        # Fallback to default cadet for dashboard/preview flows only
         s = session.query(Student).filter(Student.student_code == DEFAULT_STUDENT_CODE).first()
     return s
 
@@ -495,7 +750,7 @@ def get_student_dashboard_from_admin_db(student_code: str = DEFAULT_STUDENT_CODE
     """
     session = SessionLocal()
     try:
-        student = find_student(session, student_code)
+        student = find_student(session, student_code, fallback_default=False)
         if not student:
             return {"error": f"Student {student_code} not found in Airborne Admin DB"}
 
@@ -585,11 +840,63 @@ def get_student_dashboard_from_admin_db(student_code: str = DEFAULT_STUDENT_CODE
                 "status": "pending",
             })
 
+        # Attendance history from DB rows + custom field cache
+        att_rows = session.query(StudentAttendance).filter(
+            StudentAttendance.student_id == str(student.id)
+        ).order_by(desc(StudentAttendance.created_at)).limit(40).all()
+        attendance_records = [
+            {
+                "id": a.id,
+                "date": a.date,
+                "dayOfWeek": a.day_of_week,
+                "subject": a.subject,
+                "instructor": a.instructor,
+                "status": a.status,
+                "timestamp": a.timestamp,
+                "checkInMethod": a.check_in_method or "Biometric QR",
+            }
+            for a in att_rows
+        ]
+        if not attendance_records:
+            attendance_records = list(custom_fields.get("attendance_logs", []))
+
+        leave_requests = list(custom_fields.get("leave_requests", []))
+
+        # Real LMS Certificates query
+        certificates_data = []
+        try:
+            certs = session.query(LmsCertificate).filter(
+                LmsCertificate.student_id == student.id
+            ).order_by(desc(LmsCertificate.created_at)).all()
+            for c in certs:
+                c_meta = dict(c.metadata_json or {})
+                certificates_data.append({
+                    "id": str(c.id),
+                    "code": c.certificate_no,
+                    "title": c.title,
+                    "category": c_meta.get("category", "DGCA Theory Endorsement"),
+                    "instructor": c_meta.get("instructor", "Capt. Navrang Singh"),
+                    "instructorRole": c_meta.get("instructorRole", "Senior DGCA Ground Instructor"),
+                    "dateIssued": c.issued_at.strftime("%d %b %Y") if c.issued_at else "Pending Final Mock",
+                    "validTill": c_meta.get("validTill", "Permanent (DGCA Session 3/2026)"),
+                    "status": c.status,
+                    "credentialNo": c.verification_code or c.certificate_no,
+                    "hoursOrLectures": c_meta.get("hoursOrLectures", "30 / 30 Lectures (100% Attendance)"),
+                    "gradeScore": c_meta.get("gradeScore", "Mock Cleared (88%)"),
+                    "description": c_meta.get("description", "Official ground school completion endorsement."),
+                    "fileUrl": c.file_url
+                })
+        except Exception as e:
+            logger.debug("LmsCertificate query fallback: %s", e)
+
         return {
             "student": student_data,
             "timetable": timetable_data,
             "courses": courses_data,
             "transactions": transactions_data,
+            "attendanceRecords": attendance_records,
+            "certificates": certificates_data,
+            "leaveRequests": leave_requests,
             "attendanceMarkedToday": bool(today_att),
             "cloudDatabase": "Google Cloud SQL (airbornedb) on GCR airborne-admin",
             "orgId": str(student.org_id)
@@ -758,6 +1065,23 @@ def mark_attendance_in_admin_db(
         now_str = datetime.now().strftime("%I:%M %p")
         today_date = datetime.now().strftime("%d %b %Y")
 
+        # Idempotent: one attendance row per student/session/day
+        existing_day = session.query(StudentAttendance).filter(
+            StudentAttendance.student_id == str(student.id),
+            StudentAttendance.session_id == session_id,
+            StudentAttendance.date == today_date,
+        ).first()
+        if existing_day:
+            return {
+                "success": True,
+                "alreadyMarked": True,
+                "studentCode": student.student_code,
+                "attendanceRate": float((student.custom_fields or {}).get("attendanceRate", 88.5)),
+                "attendedClasses": int((student.custom_fields or {}).get("attendedClasses", 108)),
+                "timestamp": existing_day.timestamp,
+                "syncedToAdmin": True,
+            }
+
         # 1. Update StudentAttendance
         att_record = StudentAttendance(
             student_id=str(student.id),
@@ -775,33 +1099,27 @@ def mark_attendance_in_admin_db(
 
         # 2. Add LMS attendance record (with valid session foreign key)
         try:
-            sess_row = session.execute(
-                text('SELECT id FROM lms_attendance_sessions WHERE title = :title LIMIT 1'),
-                {'title': f"{subject_name} ({location})"}
-            ).fetchone()
+            sess_record = session.query(LmsAttendanceSession).filter_by(
+                title=f"{subject_name} ({location})"
+            ).first()
 
-            if sess_row:
-                lms_sess_id = sess_row[0]
+            if sess_record:
+                lms_sess_id = sess_record.id
             else:
                 lms_sess_id = uuid.uuid4()
-                course_row = session.execute(text('SELECT id FROM lms_courses LIMIT 1')).fetchone()
-                course_id = course_row[0] if course_row else uuid.UUID("c486b19b-b326-42aa-956a-6c11c1088745")
-                session.execute(
-                    text('''
-                        INSERT INTO lms_attendance_sessions (id, "orgId", "courseId", title, "heldAt", notes, "createdAt", "subjectTag")
-                        VALUES (:id, :orgId, :courseId, :title, :heldAt, :notes, :now, :tag)
-                    '''),
-                    {
-                        'id': lms_sess_id,
-                        'orgId': student.org_id,
-                        'courseId': course_id,
-                        'title': f"{subject_name} ({location})",
-                        'heldAt': datetime.utcnow(),
-                        'notes': f"Instructor: {instructor_name}",
-                        'now': datetime.utcnow(),
-                        'tag': subject_name[:50]
-                    }
+                course_record = session.query(LmsCourse).first()
+                course_id = course_record.id if course_record else uuid.UUID("c486b19b-b326-42aa-956a-6c11c1088745")
+                lms_sess = LmsAttendanceSession(
+                    id=lms_sess_id,
+                    org_id=student.org_id,
+                    course_id=course_id,
+                    title=f"{subject_name} ({location})",
+                    held_at=datetime.utcnow(),
+                    notes=f"Instructor: {instructor_name}",
+                    created_at=datetime.utcnow(),
+                    subject_tag=subject_name[:50]
                 )
+                session.add(lms_sess)
 
             # Check if attendance already recorded for this session & student to respect unique constraint
             existing_att = session.query(LmsAttendanceRecord).filter_by(
@@ -997,14 +1315,20 @@ def record_quiz_attempt_in_admin_db(
         pct = round((score / max_score) * 100) if max_score > 0 else 0
         passed = pct >= 70
 
-        first_mod = session.execute(text("SELECT id FROM lms_modules LIMIT 1")).scalar()
+        try:
+            first_mod = session.execute(text("SELECT id FROM lms_modules LIMIT 1")).scalar()
+        except Exception:
+            first_mod = None
         module_uuid = first_mod or uuid.UUID("4d8e2788-914b-4c77-8f12-d9b3d7459488")
 
         # Dynamically calculate attemptNumber for (studentId, moduleId) unique constraint
-        max_attempt = session.execute(
-            text('SELECT COALESCE(MAX("attemptNumber"), 0) FROM lms_quiz_attempts WHERE "studentId" = :sid AND "moduleId" = :mid'),
-            {"sid": student.id, "mid": module_uuid}
-        ).scalar() or 0
+        try:
+            max_attempt = session.query(func.max(LmsQuizAttempt.attempt_number)).filter(
+                LmsQuizAttempt.student_id == student.id,
+                LmsQuizAttempt.module_id == module_uuid
+            ).scalar() or 0
+        except Exception:
+            max_attempt = 0
         next_attempt = int(max_attempt) + 1
 
         attempt = LmsQuizAttempt(
@@ -1056,9 +1380,57 @@ def record_lecture_progress_in_admin_db(
     total_lectures: int
 ) -> Dict[str, Any]:
     """
-    Records module lecture completion in the Admin DB.
+    Records module lecture completion in the Admin DB and updates admission metadata.
     """
     pct = round((completed_lectures / total_lectures) * 100) if total_lectures > 0 else 0
+    session = SessionLocal()
+    try:
+        student = find_student(session, student_code, fallback_default=False)
+        if not student:
+            return {"success": False, "error": "Student not found"}
+
+        admission = session.query(Admission).filter(Admission.student_id == student.id).first()
+        if admission:
+            meta = dict(admission.metadata_json or {})
+            courses = list(meta.get("enrolled_courses", []))
+            updated = False
+            for c in courses:
+                if str(c.get("name", "")).lower() == course_name.lower() or str(c.get("code", "")).lower() == course_name.lower():
+                    c["completedLectures"] = completed_lectures
+                    c["totalLectures"] = total_lectures
+                    c["progress"] = pct
+                    updated = True
+                    break
+            if updated:
+                meta["enrolled_courses"] = courses
+                admission.metadata_json = meta
+                session.commit()
+
+        # LMS progress upsert best-effort
+        try:
+            progress = session.query(LmsStudentProgress).filter(
+                LmsStudentProgress.student_id == student.id
+            ).first()
+            if not progress:
+                progress = LmsStudentProgress(
+                    student_id=student.id,
+                    user_id=student.user_id,
+                    completed=pct >= 100,
+                    percent=pct,
+                    completed_at=datetime.utcnow() if pct >= 100 else None,
+                )
+                session.add(progress)
+            else:
+                progress.percent = pct
+                progress.completed = pct >= 100
+                progress.completed_at = datetime.utcnow() if pct >= 100 else progress.completed_at
+            session.commit()
+        except Exception as e:
+            logger.warning("LMS progress upsert notice: %s", e)
+            session.rollback()
+    finally:
+        session.close()
+
     return record_student_activity(
         student_code=student_code,
         verb="course_progress_updated",
@@ -1080,7 +1452,7 @@ def get_student_activities_from_admin_db(student_code: str, limit: int = 20) -> 
     """
     session = SessionLocal()
     try:
-        student = find_student(session, student_code)
+        student = find_student(session, student_code, fallback_default=False)
 
         if not student:
             return []
@@ -1176,12 +1548,13 @@ def authenticate_user(role: str, identifier: str, password: str = "") -> Dict[st
 
     try:
         if role == "student":
-            student = find_student(session, raw_id)
+            # Never silently map unknown IDs to the default cadet during login
+            student = find_student(session, raw_id, fallback_default=False)
             if not student:
                 # Check by computer number inside customFields
                 all_s = session.query(Student).all()
                 for s in all_s:
-                    c_num = (s.custom_fields or {}).get("computerNumber", "").lower()
+                    c_num = str((s.custom_fields or {}).get("computerNumber", "")).lower()
                     if c_num and c_num == clean_id:
                         student = s
                         break
@@ -1192,9 +1565,41 @@ def authenticate_user(role: str, identifier: str, password: str = "") -> Dict[st
                     "error": f"Cadet '{identifier}' not found in Airborne database. Please verify your roll number (e.g. AA-CPL-2026-084) or registered email."
                 }
 
-            # Verify password/PIN
-            if pwd and pwd.lower() not in ["cadet2026", "airborne2026", "pilot2026", "password", student.student_code.lower()]:
-                return {"success": False, "error": "Incorrect Cadet Flight PIN or Password."}
+            # Verify password/PIN:
+            password_verified = False
+            if student.user_id:
+                try:
+                    u = session.query(User).filter(User.id == student.user_id).first()
+                    if u and u.password_hash:
+                        if u.password_hash.startswith("$argon2"):
+                            try:
+                                from argon2 import PasswordHasher
+                                ph = PasswordHasher()
+                                ph.verify(u.password_hash, pwd)
+                                password_verified = True
+                            except Exception:
+                                password_verified = False
+                        elif u.password_hash.startswith("sha256$"):
+                            expected = f"sha256${hashlib.sha256(pwd.encode('utf-8')).hexdigest()}"
+                            if hmac.compare_digest(u.password_hash, expected):
+                                password_verified = True
+                        elif u.password_hash == pwd:
+                            password_verified = True
+                except Exception as verify_err:
+                    logger.warning("Password verification notice: %s", verify_err)
+
+            # Check provisional passwords from Admin OS
+            custom = student.custom_fields or {}
+            if pwd and (pwd == custom.get("provisionalPassword") or pwd == custom.get("tempPassword")):
+                password_verified = True
+
+            # Standard demo flight PINs fallback
+            valid_pins = {"cadet2026", "airborne2026", "pilot2026", "password", student.student_code.lower()}
+            if pwd and pwd.lower() in valid_pins:
+                password_verified = True
+
+            if not password_verified:
+                return {"success": False, "error": "Incorrect Cadet Flight PIN or Password. Try: cadet2026"}
 
             custom = student.custom_fields or {}
             adm = session.query(Admission).filter(Admission.student_id == student.id).first()
@@ -1212,10 +1617,17 @@ def authenticate_user(role: str, identifier: str, password: str = "") -> Dict[st
             except Exception as e:
                 logger.warning("Could not record login activity: %s", e)
 
+            token = create_access_token(
+                role="student",
+                user_id=str(student.id),
+                student_code=student.student_code,
+                email=student.email,
+                name=f"Cadet {student.first_name} {student.last_name}",
+            )
             return {
                 "success": True,
                 "role": "student",
-                "token": f"cadet-token-{student.student_code}",
+                "token": token,
                 "user": {
                     "id": str(student.id),
                     "studentCode": student.student_code,
@@ -1228,6 +1640,7 @@ def authenticate_user(role: str, identifier: str, password: str = "") -> Dict[st
                     "computerNumber": custom.get("computerNumber", "C-09827341"),
                     "batchName": adm.batch_name if adm else "Batch Delta-26 (Dwarka Ground Classes)",
                     "program": adm.course_name if adm else "DGCA Commercial Pilot License (CPL)",
+                    "applicationNo": adm.application_no if adm else None,
                     "avatarUrl": custom.get("avatarUrl", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80"),
                     "attendanceRate": float(custom.get("attendanceRate", 88.5)),
                     "pendingFee": float(adm.fee_balance) if adm else 35000.0
@@ -1235,29 +1648,39 @@ def authenticate_user(role: str, identifier: str, password: str = "") -> Dict[st
             }
 
         elif role == "admin":
-            # Verify admin password
-            valid_passwords = ["admin2026", "airborne2026", "admin", "navrang2026"]
-            if pwd and pwd.lower() not in valid_passwords:
-                return {"success": False, "error": "Incorrect Admin Security Passphrase."}
+            # Verify admin password (required)
+            valid_passwords = {"admin2026", "airborne2026", "admin", "navrang2026"}
+            if not pwd or pwd.lower() not in valid_passwords:
+                return {"success": False, "error": "Incorrect Admin Security Passphrase. Try: admin2026"}
 
             admin_name = "Capt. Navrang Singh"
             admin_desig = "Chief Ground Instructor & Academy Admin"
+            admin_id = "adm-capt-navrang-01"
 
             if "anmol" in clean_id or "accounts" in clean_id:
                 admin_name = "Anmol Singhal"
                 admin_desig = "Head of Accounts & Admissions"
+                admin_id = "adm-anmol-accounts-01"
             elif "abhilash" in clean_id:
                 admin_name = "Abhilash Singh"
                 admin_desig = "Flight Operations Director"
+                admin_id = "adm-abhilash-ops-01"
 
+            admin_email = raw_id if "@" in raw_id else "admin@airborneaviation.in"
+            token = create_access_token(
+                role="admin",
+                user_id=admin_id,
+                email=admin_email,
+                name=admin_name,
+            )
             return {
                 "success": True,
                 "role": "admin",
-                "token": "admin-token-dwarka-ops-2026",
+                "token": token,
                 "user": {
-                    "id": "adm-capt-navrang-01",
+                    "id": admin_id,
                     "name": admin_name,
-                    "email": raw_id if "@" in raw_id else "admin@airborneaviation.in",
+                    "email": admin_email,
                     "role": "admin",
                     "designation": admin_desig,
                     "phone": "+91 9953-777-320",
@@ -1308,6 +1731,7 @@ def get_admin_dashboard_summary() -> Dict[str, Any]:
                 "email": s.email,
                 "phone": s.phone,
                 "computerNumber": custom.get("computerNumber", "C-09827341"),
+                "applicationNo": adm.application_no if adm else "",
                 "batchName": adm.batch_name if adm else "Batch Delta-26",
                 "course": adm.course_name if adm else "DGCA CPL Ground School",
                 "attendanceRate": att_rate,
@@ -1354,9 +1778,25 @@ def get_admin_dashboard_summary() -> Dict[str, Any]:
             for p in payments
         ]
 
+        pending_admissions = [
+            {
+                "id": str(a.id),
+                "applicationNo": a.application_no,
+                "stage": a.stage,
+                "courseName": a.course_name,
+                "batchName": a.batch_name,
+                "feeFinal": float(a.fee_final or 0),
+                "feePaid": float(a.fee_paid or 0),
+                "feeBalance": float(a.fee_balance or 0),
+                "hasStudent": bool(a.student_id)
+            }
+            for a in admissions if a.stage in ("ENQUIRY", "ADMITTED", "PENDING_PROVISION") or not a.student_id
+        ]
+
         metrics = {
             "totalCadets": len(students),
             "activeCadets": sum(1 for s in students if s.status == "ACTIVE") or len(students),
+            "pendingAdmissions": len(pending_admissions),
             "averageAttendance": avg_att,
             "compliantCadets": compliant_count,
             "warningCadets": warning_count,
@@ -1386,6 +1826,7 @@ def get_admin_dashboard_summary() -> Dict[str, Any]:
         return {
             "metrics": metrics,
             "students": roster,
+            "pendingAdmissions": pending_admissions,
             "timetable": timetable_list,
             "recentTransactions": recent_txns,
             "activityLogs": recent_acts,
@@ -1404,8 +1845,576 @@ def admin_record_student_payment(
     """
     Admin desk records payment on behalf of a student.
     """
-    return record_fee_payment_in_admin_db(
+    result = record_fee_payment_in_admin_db(
         student_code=student_code,
         amount=amount,
         payment_method=method
     )
+    if result.get("success") and fee_type:
+        # Best-effort annotate latest payment description/fee type
+        session = SessionLocal()
+        try:
+            student = find_student(session, student_code, fallback_default=False)
+            if student:
+                txn = session.query(PaymentTransaction).filter(
+                    PaymentTransaction.student_id == student.id
+                ).order_by(desc(PaymentTransaction.paid_at)).first()
+                if txn:
+                    txn.fee_type = fee_type
+                    txn.description = fee_type
+                    session.commit()
+        except Exception as e:
+            logger.warning("Could not annotate admin payment fee_type: %s", e)
+            session.rollback()
+        finally:
+            session.close()
+    return result
+
+
+def submit_leave_request(
+    student_code: str,
+    leave_date: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Stores excused leave request against cadet profile + admin activity feed."""
+    session = SessionLocal()
+    try:
+        student = find_student(session, student_code, fallback_default=False)
+        if not student:
+            return {"success": False, "error": "Student not found"}
+
+        custom = dict(student.custom_fields or {})
+        leaves = list(custom.get("leave_requests", []))
+        leave_id = f"LEAVE-{int(datetime.utcnow().timestamp())}"
+        entry = {
+            "id": leave_id,
+            "date": leave_date,
+            "reason": reason,
+            "status": "PENDING",
+            "submittedAt": datetime.utcnow().strftime("%d %b %Y, %I:%M %p"),
+        }
+        leaves.insert(0, entry)
+        custom["leave_requests"] = leaves[:50]
+        student.custom_fields = custom
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        session.close()
+
+    record_student_activity(
+        student_code=student_code,
+        verb="leave_request_submitted",
+        activity_type="TASK",
+        title=f"Excused Leave Request: {leave_date}",
+        notes=reason,
+        snapshot=entry,
+    )
+    return {"success": True, "leave": entry}
+
+
+def admin_review_leave_request(
+    student_code: str,
+    leave_id: str,
+    status: str = "APPROVED",
+) -> Dict[str, Any]:
+    """Admin approves/rejects a cadet leave request."""
+    status = (status or "APPROVED").upper()
+    if status not in {"APPROVED", "REJECTED", "PENDING"}:
+        return {"success": False, "error": "Invalid leave status"}
+
+    session = SessionLocal()
+    try:
+        student = find_student(session, student_code, fallback_default=False)
+        if not student:
+            return {"success": False, "error": "Student not found"}
+        custom = dict(student.custom_fields or {})
+        leaves = list(custom.get("leave_requests", []))
+        found = None
+        for item in leaves:
+            if item.get("id") == leave_id:
+                item["status"] = status
+                item["reviewedAt"] = datetime.utcnow().strftime("%d %b %Y, %I:%M %p")
+                found = item
+                break
+        if not found:
+            return {"success": False, "error": "Leave request not found"}
+        custom["leave_requests"] = leaves
+        student.custom_fields = custom
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        session.close()
+
+    record_student_activity(
+        student_code=student_code,
+        verb="leave_request_reviewed",
+        activity_type="NOTE",
+        title=f"Leave {status.title()}: {found.get('date')}",
+        notes=f"Operations desk marked leave {leave_id} as {status}.",
+        snapshot=found,
+    )
+    return {"success": True, "leave": found}
+
+
+def admin_mark_attendance(
+    student_code: str,
+    session_id: str = "TT-01",
+) -> Dict[str, Any]:
+    """Admin/mentor marks attendance on behalf of a cadet."""
+    result = mark_attendance_in_admin_db(student_code=student_code, session_id=session_id)
+    if result.get("success"):
+        record_student_activity(
+            student_code=student_code,
+            verb="attendance_marked_by_admin",
+            activity_type="TASK",
+            title="Attendance Verified by Academy Admin",
+            notes=f"Operations desk verified biometric/mentor attendance for session {session_id}.",
+            snapshot={"sessionId": session_id, "source": "admin_deck"},
+        )
+    return result
+
+
+def get_pending_leave_requests(limit: int = 50) -> List[Dict[str, Any]]:
+    """Aggregate pending leave requests across cadets for admin deck."""
+    session = SessionLocal()
+    try:
+        pending = []
+        for s in session.query(Student).all():
+            custom = s.custom_fields or {}
+            for leave in custom.get("leave_requests", []):
+                if str(leave.get("status", "PENDING")).upper() == "PENDING":
+                    pending.append({
+                        **leave,
+                        "studentCode": s.student_code,
+                        "studentName": f"{s.first_name} {s.last_name}",
+                    })
+        pending.sort(key=lambda x: x.get("submittedAt", ""), reverse=True)
+        return pending[:limit]
+    finally:
+        session.close()
+
+
+def seed_additional_cohort_students():
+    """Seed a small Delta-26 cohort so admin roster is not a single-cadet demo."""
+    cohort = [
+        ("AA-CPL-2026-085", "Amanpreet", "Singh", "amanpreet.singh@airborneaviation.in", "+919876543085", "C-09827342", 94.0, 185000, 0, "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80", "Flight Navigation Lead"),
+        ("AA-CPL-2026-086", "Tanvi", "Verma", "tanvi.verma@airborneaviation.in", "+919876543086", "C-09827343", 91.5, 150000, 35000, "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=250&q=80", "Met Study Coordinator"),
+        ("AA-CPL-2026-087", "Siddharth", "Rao", "siddharth.rao@airborneaviation.in", "+919876543087", "C-09827344", 86.0, 150000, 35000, "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80", "Tech General Specialist"),
+        ("AA-CPL-2026-088", "Ananya", "Deshmukh", "ananya.deshmukh@airborneaviation.in", "+919876543088", "C-09827345", 96.0, 185000, 0, "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=250&q=80", "Honor Cadet (Top Scorer)"),
+        ("AA-CPL-2026-089", "Karan", "Mehra", "karan.mehra@airborneaviation.in", "+919876543089", "C-09827346", 82.5, 120000, 65000, "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=250&q=80", "RTR Simulation Lead"),
+        ("AA-CPL-2026-090", "Priya", "Nambiar", "priya.nambiar@airborneaviation.in", "+919876543090", "C-09827347", 89.0, 185000, 0, "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=250&q=80", "Flight Planning Officer"),
+        ("AA-CPL-2026-091", "Rohan", "Sengupta", "rohan.sengupta@airborneaviation.in", "+919876543091", "C-09827348", 77.5, 110000, 75000, "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=250&q=80", "DGCA Remediation (Attendance Alert)"),
+    ]
+    session = SessionLocal()
+    try:
+        org_uuid = uuid.UUID(ORG_ID)
+        for code, first, last, email, phone, computer, att, paid, balance, avatar, role in cohort:
+            exists = session.query(Student).filter(Student.student_code == code).first()
+            if exists:
+                continue
+            sid = uuid.uuid4()
+            lead = uuid.uuid4()
+            student = Student(
+                id=sid,
+                org_id=org_uuid,
+                lead_id=lead,
+                user_id=uuid.uuid4(),
+                student_code=code,
+                first_name=first,
+                last_name=last,
+                email=email,
+                phone=phone,
+                status="ACTIVE",
+                custom_fields={
+                    "computerNumber": computer,
+                    "attendanceRate": att,
+                    "totalClasses": 122,
+                    "attendedClasses": int(round(122 * att / 100)),
+                    "targetDgcaSession": "DGCA CPL Session 3/2026",
+                    "centre": "Dwarka Centre, New Delhi",
+                    "avatarUrl": avatar,
+                    "attendance_logs": [],
+                    "leave_requests": [],
+                },
+            )
+            session.add(student)
+            session.add(Admission(
+                id=uuid.uuid4(),
+                org_id=org_uuid,
+                student_id=sid,
+                lead_id=lead,
+                application_no=f"APP-2026-{code[-3:]}",
+                stage="ENROLLED",
+                course_name="DGCA Commercial Pilot License (CPL) Ground School",
+                batch_name="Batch Delta-26 (Dwarka Ground Classes)",
+                batch_start_date=datetime(2026, 6, 1),
+                fee_amount=Decimal("185000.00"),
+                fee_discount=Decimal("0.00"),
+                fee_final=Decimal("185000.00"),
+                fee_paid=Decimal(str(paid)),
+                fee_balance=Decimal(str(balance)),
+                metadata_json={
+                    "dgca_exam_session": "DGCA CPL Session 3/2026",
+                    "counselor_name": "Capt. Navrang Singh",
+                    "enrolled_courses": [
+                        {"id": "CRS-01", "code": "NAV-CPL", "name": "Air Navigation", "instructor": "Capt. Navrang Singh", "progress": 70, "completedLectures": 28, "totalLectures": 40, "nextMockExam": "04 Nov 2026", "averageScore": 80},
+                        {"id": "CRS-02", "code": "MET-CPL", "name": "Aviation Meteorology", "instructor": "Capt. Alok Sharma", "progress": 85, "completedLectures": 25, "totalLectures": 30, "nextMockExam": "02 Nov 2026", "averageScore": 86},
+                    ],
+                },
+            ))
+        session.commit()
+
+        # Seed APP-2026-00010 (new admission application pending student portal provisioning)
+        app10_adm = session.query(Admission).filter(Admission.application_no == "APP-2026-00010").first()
+        if not app10_adm:
+            lead10_id = uuid.UUID("3c1619aa-54da-4be6-a474-4b2838cd4820")
+            lead10 = session.query(Lead).filter(Lead.id == lead10_id).first()
+            if not lead10:
+                lead10 = Lead(
+                    id=lead10_id,
+                    org_id=org_uuid,
+                    name="Feedback Convert Lead",
+                    email="feedback.convert@airborne.test",
+                    phone="920234221682",
+                    city="New Delhi",
+                    state="Delhi",
+                    status="ACTIVE"
+                )
+                session.add(lead10)
+            session.add(Admission(
+                id=uuid.UUID("10101010-0010-4010-8010-000000000010"),
+                org_id=org_uuid,
+                student_id=None,
+                lead_id=lead10_id,
+                application_no="APP-2026-00010",
+                stage="ENQUIRY",
+                course_name="Commercial Pilot License (CPL) Ground School",
+                batch_name="Batch Delta-26 (Dwarka Ground Classes)",
+                fee_amount=Decimal("185000.00"),
+                fee_discount=Decimal("0.00"),
+                fee_final=Decimal("185000.00"),
+                fee_paid=Decimal("50000.00"),
+                fee_balance=Decimal("135000.00"),
+                metadata_json={"counselor_name": "Capt. Navrang Singh"}
+            ))
+            session.commit()
+    except Exception as e:
+        logger.warning("Cohort seed notice: %s", e)
+        session.rollback()
+    finally:
+        session.close()
+
+
+def probe_database() -> Dict[str, Any]:
+    """Connectivity probe for /health."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {
+            "connected": True,
+            "dialect": str(engine.url.get_backend_name()),
+            "database": str(engine.url.database),
+        }
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
+
+
+def provision_student_portal_access(
+    student_identifier: str,
+    password: str,
+    must_change_password: bool = True,
+    actor_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Provisions a provisional/permanent STUDENT user account and links it to the student record.
+    Matches Admin OS provisionPortalAccess logic, using Argon2id password hashing.
+    """
+    if not password or len(password) < 8:
+        return {"success": False, "error": "Temporary password must be at least 8 characters long."}
+
+    session = SessionLocal()
+    try:
+        student = find_student(session, student_identifier, fallback_default=False)
+        if not student:
+            return {"success": False, "error": f"Student '{student_identifier}' not found in database."}
+
+        # Hash password using Argon2id
+        try:
+            from argon2 import PasswordHasher
+            ph = PasswordHasher()
+            hashed_pwd = ph.hash(password)
+        except Exception as hash_err:
+            logger.warning("Argon2 unavailable, falling back to SHA256: %s", hash_err)
+            hashed_pwd = f"sha256${hashlib.sha256(password.encode('utf-8')).hexdigest()}"
+
+        user = None
+        linked_existing = False
+
+        if student.user_id:
+            user = session.query(User).filter(User.id == student.user_id).first()
+        if not user:
+            user = session.query(User).filter(User.email == student.email).first()
+            if user:
+                linked_existing = True
+
+        now = datetime.utcnow()
+        if user:
+            user.password_hash = hashed_pwd
+            user.is_active = True
+            user.role = "STUDENT"
+            user.updated_at = now
+            student.user_id = user.id
+        else:
+            user = User(
+                id=uuid.uuid4(),
+                org_id=student.org_id,
+                campus_id=student.campus_id,
+                name=f"{student.first_name} {student.last_name}",
+                email=student.email,
+                phone=student.phone,
+                password_hash=hashed_pwd,
+                role="STUDENT",
+                is_active=True,
+                created_at=now,
+                updated_at=now
+            )
+            session.add(user)
+            student.user_id = user.id
+
+        # Update student customFields metadata
+        cf = dict(student.custom_fields or {})
+        cf["portal_access"] = {
+            "provisioned": True,
+            "provisionedAt": now.isoformat(),
+            "role": "STUDENT",
+            "userId": str(user.id),
+            "email": student.email,
+            "mustChangePassword": must_change_password
+        }
+        student.custom_fields = cf
+
+        # Add Audit log
+        try:
+            audit = AuditLog(
+                org_id=student.org_id,
+                user_id=uuid.UUID(actor_id) if actor_id and len(actor_id) == 36 else None,
+                action="lms.portal_access_provisioned",
+                entity_type="student",
+                entity_id=str(student.id),
+                new_value={
+                    "userId": str(user.id),
+                    "studentCode": student.student_code,
+                    "email": student.email,
+                    "linkedExisting": linked_existing,
+                    "provisionedAt": now.isoformat()
+                }
+            )
+            session.add(audit)
+        except Exception as audit_err:
+            logger.warning("Audit log notice: %s", audit_err)
+
+        session.commit()
+
+        # Record activity feed item
+        record_student_activity(
+            student_code=student.student_code,
+            verb="portal_access_provisioned",
+            activity_type="SYSTEM",
+            title="Provisional Portal Access Generated",
+            notes=f"Student portal login provisioned for Cadet {student.first_name} {student.last_name} ({student.student_code}).",
+            snapshot={
+                "studentId": str(student.id),
+                "studentCode": student.student_code,
+                "userId": str(user.id),
+                "email": student.email,
+                "role": "STUDENT"
+            }
+        )
+
+        adm = session.query(Admission).filter(Admission.student_id == student.id).first()
+        return {
+            "success": True,
+            "studentId": str(student.id),
+            "studentCode": student.student_code,
+            "applicationNo": adm.application_no if adm else None,
+            "userId": str(user.id),
+            "email": student.email,
+            "name": f"Cadet {student.first_name} {student.last_name}",
+            "role": "STUDENT",
+            "linkedExisting": linked_existing,
+            "provisionedAt": now.isoformat(),
+            "message": "Student portal login credentials provisioned successfully."
+        }
+    except Exception as e:
+        session.rollback()
+        logger.error("Error provisioning portal access: %s", e)
+        return {"success": False, "error": str(e)}
+    finally:
+        session.close()
+
+
+def get_student_provision_status(student_identifier: str) -> Dict[str, Any]:
+    session = SessionLocal()
+    try:
+        student = find_student(session, student_identifier, fallback_default=False)
+        if not student:
+            return {"success": False, "error": f"Student '{student_identifier}' not found"}
+
+        cf = student.custom_fields or {}
+        pa = cf.get("portal_access", {})
+        user = session.query(User).filter(User.id == student.user_id).first() if student.user_id else None
+
+        adm = session.query(Admission).filter(Admission.student_id == student.id).first()
+        return {
+            "success": True,
+            "studentId": str(student.id),
+            "studentCode": student.student_code,
+            "applicationNo": adm.application_no if adm else None,
+            "name": f"Cadet {student.first_name} {student.last_name}",
+            "email": student.email,
+            "isProvisioned": bool(student.user_id or pa.get("provisioned")),
+            "userId": str(user.id) if user else pa.get("userId"),
+            "role": user.role if user else pa.get("role", "STUDENT"),
+            "provisionedAt": pa.get("provisionedAt"),
+            "isActive": user.is_active if user else True
+        }
+    finally:
+        session.close()
+
+
+# ==============================================================================
+# LIVE LMS SYNC HELPERS (Courses, Chapters, Questions, Certificates, SSO)
+# ==============================================================================
+
+def get_live_lms_courses_and_chapters():
+    session = SessionLocal()
+    try:
+        courses = session.query(LmsCourse).all()
+        result = []
+        for c in courses:
+            stages = session.query(LmsStage).filter(LmsStage.course_id == c.id).order_by(LmsStage.order).all()
+            stages_data = []
+            for st in stages:
+                mods = session.query(LmsModule).filter(LmsModule.stage_id == st.id).order_by(LmsModule.order).all()
+                mod_data = []
+                for m in mods:
+                    chaps = session.query(LmsChapter).filter(LmsChapter.module_id == m.id).order_by(LmsChapter.order).all()
+                    chap_data = []
+                    for ch in chaps:
+                        q_count = session.query(LmsQuestion).filter(LmsQuestion.chapter_id == ch.id).count()
+                        chap_data.append({
+                            "id": str(ch.id),
+                            "title": ch.title,
+                            "order": ch.order,
+                            "questionCount": q_count
+                        })
+                    mod_data.append({
+                        "id": str(m.id),
+                        "title": m.title,
+                        "chapters": chap_data
+                    })
+                stages_data.append({
+                    "id": str(st.id),
+                    "title": st.title,
+                    "modules": mod_data
+                })
+            result.append({
+                "id": str(c.id),
+                "title": c.title,
+                "slug": c.slug,
+                "stages": stages_data
+            })
+        return result
+    except Exception as e:
+        logger.warning("Error fetching live LMS courses and chapters: %s", e)
+        return []
+    finally:
+        session.close()
+
+def get_live_questions_for_practice(chapter_id=None, subject=None, limit=50):
+    session = SessionLocal()
+    try:
+        q_query = session.query(LmsQuestion)
+        if chapter_id:
+            try:
+                q_query = q_query.filter(LmsQuestion.chapter_id == uuid.UUID(str(chapter_id)))
+            except Exception:
+                pass
+        
+        questions = q_query.order_by(LmsQuestion.order.asc()).limit(limit).all()
+        if not questions:
+            questions = session.query(LmsQuestion).order_by(LmsQuestion.created_at.desc()).limit(limit).all()
+        
+        opt_map = {"a": 0, "b": 1, "c": 2, "d": 3}
+        formatted = []
+        for q in questions:
+            raw_opts = q.options or []
+            opts_text = []
+            if isinstance(raw_opts, list):
+                for opt in raw_opts:
+                    if isinstance(opt, dict):
+                        opts_text.append(opt.get("text", ""))
+                    elif isinstance(opt, str):
+                        opts_text.append(opt)
+            
+            c_idx = opt_map.get(str(q.correct_option_id).lower(), 0)
+            
+            formatted.append({
+                "id": str(q.id),
+                "chapterId": str(q.chapter_id) if q.chapter_id else None,
+                "question": q.stem,
+                "imageUrl": q.image_url,
+                "options": opts_text,
+                "correctAnswer": c_idx,
+                "correctOptionId": q.correct_option_id,
+                "explanation": q.explanation or "Official DGCA CPL Concept Reference (Airborne Academy Ground School).",
+                "points": q.points,
+                "difficulty": q.difficulty,
+                "subject": subject or "DGCA CPL Ground School"
+            })
+        return formatted
+    except Exception as e:
+        logger.warning("Error fetching live questions for practice: %s", e)
+        return []
+    finally:
+        session.close()
+
+def get_live_student_certificates(student_code: str):
+    session = SessionLocal()
+    try:
+        student = find_student(session, student_code)
+        if not student:
+            return []
+        certs = session.query(LmsCertificate).filter(LmsCertificate.student_id == student.id).all()
+        result = []
+        for c in certs:
+            c_meta = dict(c.metadata_json or {})
+            result.append({
+                "id": str(c.id),
+                "code": c.certificate_no,
+                "title": c.title,
+                "category": c_meta.get("category", "DGCA Theory Endorsement"),
+                "instructor": c_meta.get("instructor", "Capt. Navrang Singh"),
+                "instructorRole": c_meta.get("instructorRole", "Senior DGCA Ground Instructor"),
+                "dateIssued": c.issued_at.strftime("%d %b %Y") if c.issued_at else "Pending Final Mock",
+                "validTill": c_meta.get("validTill", "Permanent (DGCA Session 3/2026)"),
+                "status": c.status,
+                "credentialNo": c.verification_code or c.certificate_no,
+                "hoursOrLectures": c_meta.get("hoursOrLectures", "30 / 30 Lectures (100% Attendance)"),
+                "gradeScore": c_meta.get("gradeScore", "Mock Cleared (88%)"),
+                "description": c_meta.get("description", "Official ground school completion endorsement."),
+                "fileUrl": c.file_url
+            })
+        return result
+    except Exception as e:
+        logger.warning("Error fetching live student certificates: %s", e)
+        return []
+    finally:
+        session.close()
+
+def submit_live_quiz_attempt(student_code: str, subject: str, score: int, max_score: int, answers=None):
+    return record_quiz_attempt_in_admin_db(student_code, subject, score, max_score, answers)

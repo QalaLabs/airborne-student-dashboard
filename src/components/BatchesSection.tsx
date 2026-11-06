@@ -307,14 +307,34 @@ export const BatchesSection: React.FC<BatchesSectionProps> = ({
                 <span>Batch:</span>
                 <span className="font-bold text-[#00274C]">Delta-26 (Dwarka)</span>
               </div>
+              {selectedBatchmate.studentCode && (
+                <div className="flex justify-between text-slate-600">
+                  <span>Student Code:</span>
+                  <span className="font-bold font-flight-mono text-[#00274C]">{selectedBatchmate.studentCode}</span>
+                </div>
+              )}
+              {selectedBatchmate.computerNumber && (
+                <div className="flex justify-between text-slate-600">
+                  <span>DGCA Computer No:</span>
+                  <span className="font-bold font-flight-mono text-[#00274C]">{selectedBatchmate.computerNumber}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-600">
                 <span>Attendance:</span>
-                <span className="font-bold text-emerald-600">{selectedBatchmate.attendance}%</span>
+                <span className={`font-bold ${selectedBatchmate.attendance >= 80 ? 'text-emerald-600' : 'text-[#DB241E]'}`}>
+                  {selectedBatchmate.attendance}% {selectedBatchmate.attendance < 80 ? '(Below 80% Rule)' : '(Compliant)'}
+                </span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Study Group:</span>
                 <span className="font-bold text-[#00274C]">Flight Plan & Navigation Pod #2</span>
               </div>
+              {selectedBatchmate.email && (
+                <div className="flex justify-between text-slate-600 pt-1 border-t border-slate-200/60">
+                  <span>Academy Email:</span>
+                  <span className="font-medium text-slate-700">{selectedBatchmate.email}</span>
+                </div>
+              )}
             </div>
 
             <div className="mt-5 flex gap-2">

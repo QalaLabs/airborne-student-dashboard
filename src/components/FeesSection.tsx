@@ -23,7 +23,7 @@ interface FeesSectionProps {
   student: StudentProfile;
   installments: FeeInstallment[];
   feeHeads: FeeHeadBreakdown[];
-  onPaymentSuccess: (paidAmount: number, receiptNum: string) => void;
+  onPaymentSuccess: (paidAmount: number, receiptNum: string, paymentMethod?: string) => Promise<string | void> | void;
 }
 
 export const FeesSection: React.FC<FeesSectionProps> = ({
@@ -39,16 +39,17 @@ export const FeesSection: React.FC<FeesSectionProps> = ({
 
   const pendingAmount = student.pendingFee;
 
-  const handlePay = () => {
+  const handlePay = async () => {
     setIsProcessing(true);
+    try {
+      const methodMap = { upi: 'UPI', card: 'CARD', netbanking: 'NETBANKING' } as const;
+      const placeholderReceipt = `AAA-REC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const serverReceipt = await onPaymentSuccess(
+        pendingAmount,
+        placeholderReceipt,
+        methodMap[paymentMethod]
+      );
 
-    setTimeout(() => {
-      setIsProcessing(false);
-      setPayModalOpen(false);
-
-      const generatedReceipt = `AAA-REC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      // Fire celebratory confetti
       confetti({
         particleCount: 100,
         spread: 70,
@@ -56,8 +57,26 @@ export const FeesSection: React.FC<FeesSectionProps> = ({
         colors: ['#00274C', '#DB241E', '#D8A027', '#ffffff']
       });
 
-      onPaymentSuccess(pendingAmount, generatedReceipt);
-    }, 1800);
+      setPayModalOpen(false);
+      if (serverReceipt) {
+        setSelectedReceipt({
+          receiptNo: serverReceipt,
+          date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          amount: pendingAmount,
+          title: 'Online Fee Clearance',
+          paymentMode: methodMap[paymentMethod],
+          studentName: student.name,
+          rollNumber: student.rollNumber,
+          computerNumber: student.computerNumber,
+          batch: student.batchName,
+        });
+      }
+    } catch (err) {
+      console.error('Payment failed', err);
+      alert('Payment could not be recorded. Please try again or contact Academy Accounts.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const openReceiptModal = (inst: FeeInstallment) => {
@@ -145,7 +164,7 @@ export const FeesSection: React.FC<FeesSectionProps> = ({
           </div>
 
           <div className="mt-4">
-            <div className={`text-3xl font-black font-brand-primary font-flight-mono ${pendingAmount > 0 ? 'text-[#DB241E] text-white' : 'text-[#00274C]'}`}>
+            <div className={`text-3xl font-black font-brand-primary font-flight-mono ${pendingAmount > 0 ? 'text-[#D8A027]' : 'text-[#00274C]'}`}>
               ₹{pendingAmount.toLocaleString()}
             </div>
             <p className={`text-xs mt-1 ${pendingAmount > 0 ? 'text-slate-300' : 'text-slate-500'}`}>

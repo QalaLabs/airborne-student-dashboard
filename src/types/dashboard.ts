@@ -3,6 +3,7 @@ export type TabType =
   | 'timetable' 
   | 'batches' 
   | 'courses' 
+  | 'certificates'
   | 'chatbot' 
   | 'fees' 
   | 'other-courses' 
@@ -11,9 +12,62 @@ export type TabType =
   | 'admin-cadets'
   | 'admin-timetable'
   | 'admin-fees'
-  | 'admin-activity';
+  | 'admin-activity'
+  | 'admin-bridge';
 
 export type UserRole = 'student' | 'admin';
+
+export interface ProvisionAccessResponse {
+  success: boolean;
+  studentId?: string;
+  studentCode?: string;
+  applicationNo?: string;
+  userId?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  provisionedAt?: string;
+  linkedExisting?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface ProvisionStatusResponse {
+  success: boolean;
+  studentId?: string;
+  studentCode?: string;
+  applicationNo?: string;
+  name?: string;
+  email?: string;
+  isProvisioned: boolean;
+  userId?: string;
+  role?: string;
+  provisionedAt?: string;
+  isActive?: boolean;
+  error?: string;
+}
+
+export interface PendingAdmission {
+  id: string;
+  applicationNo: string;
+  stage: string;
+  courseName?: string;
+  batchName?: string;
+  feeFinal: number;
+  feePaid: number;
+  feeBalance: number;
+  hasStudent: boolean;
+}
+
+export interface WebhookInfoResponse {
+  status: string;
+  inbound_webhook_url: string;
+  outbound_webhook_target: string;
+  local_admin_url: string;
+  signature_scheme: string;
+  supported_events: string[];
+  shared_secret_configured: boolean;
+}
 
 export interface AuthUser {
   id: string;
@@ -50,6 +104,7 @@ export interface AdminMetrics {
 export interface AdminStudent {
   id: string;
   studentCode: string;
+  applicationNo?: string;
   name: string;
   email: string;
   phone: string;
@@ -71,6 +126,7 @@ export interface StudentProfile {
   id: string;
   name: string;
   rollNumber: string;
+  applicationNo?: string;
   computerNumber: string; // DGCA Computer Number
   batchId: string;
   batchName: string;
@@ -107,12 +163,16 @@ export interface TimetableSession {
 
 export interface Batchmate {
   id: string;
+  studentCode?: string;
   name: string;
   callsign: string;
   attendance: number;
   dgcaStatus: string;
   avatar: string;
   role?: string;
+  computerNumber?: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface BatchInfo {

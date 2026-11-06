@@ -15,6 +15,7 @@ interface AttendanceSectionProps {
   records: AttendanceRecord[];
   onMarkAttendance: () => void;
   todaySessionMarked: boolean;
+  onLeaveSubmitted?: (leaveDate: string, reason: string) => Promise<void> | void;
 }
 
 export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
@@ -22,6 +23,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
   records,
   onMarkAttendance,
   todaySessionMarked,
+  onLeaveSubmitted,
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
@@ -43,9 +45,17 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
     onMarkAttendance();
   };
 
-  const handleLeaveSubmit = (e: React.FormEvent) => {
+  const handleLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLeaveSubmitted(true);
+    try {
+      if (onLeaveSubmitted) {
+        await onLeaveSubmitted(leaveDate, leaveReason);
+      }
+      setLeaveSubmitted(true);
+    } catch (err) {
+      console.error('Leave request failed', err);
+      alert('Could not submit leave request to Academy Operations. Please try again.');
+    }
   };
 
   const subjectAttendance = [
@@ -126,68 +136,79 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
       </div>
 
       {/* DGCA Compliance Stats & Threshold Meter */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Overall Percentage */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div>
-            <span className="text-xs font-bold text-[#8A9BB0] uppercase tracking-wider font-brand-primary">
-              Aggregate Attendance
-            </span>
-            <div className="mt-2 text-3xl font-extrabold text-[#00274C] font-brand-primary">
-              {student.attendanceRate}%
+      {(() => {
+        const isCompliant = student.attendanceRate >= 80.0;
+        const bufferSessions = Math.max(0, Math.floor(student.attendedClasses - (student.totalClasses * 0.8)));
+        const recoverySessions = Math.max(1, Math.ceil((0.8 * student.totalClasses - student.attendedClasses) / 0.2));
+        
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Overall Percentage */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold text-[#8A9BB0] uppercase tracking-wider font-brand-primary">
+                  Aggregate Attendance
+                </span>
+                <div className={`mt-2 text-3xl font-extrabold font-brand-primary ${isCompliant ? 'text-[#00274C]' : 'text-[#DB241E]'}`}>
+                  {student.attendanceRate}%
+                </div>
+                <div className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden relative">
+                  <div className="absolute top-0 bottom-0 left-[80%] w-0.5 bg-slate-400 z-10" title="80% cutoff" />
+                  <div 
+                    className={`h-2 rounded-full transition-all duration-500 ${isCompliant ? 'bg-emerald-500' : 'bg-[#DB241E]'}`} 
+                    style={{ width: `${Math.min(100, student.attendanceRate)}%` }}
+                  />
+                </div>
+              </div>
+              <p className={`text-[11px] font-semibold mt-2 flex items-center gap-1 ${isCompliant ? 'text-emerald-600' : 'text-[#DB241E]'}`}>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                {isCompliant ? 'Compliant with DGCA 80% Rule' : 'Attention: Below 80% Cutoff'}
+              </p>
             </div>
-            <div className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-              <div 
-                className="bg-emerald-500 h-2 rounded-full transition-all duration-500" 
-                style={{ width: `${student.attendanceRate}%` }}
-              />
+
+            {/* Classes Attended */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              <span className="text-xs font-bold text-[#8A9BB0] uppercase tracking-wider font-brand-primary">
+                Attended Lectures
+              </span>
+              <div className="mt-2 text-3xl font-extrabold text-emerald-600 font-brand-primary font-flight-mono">
+                {student.attendedClasses}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Out of {student.totalClasses} total ground school classes conducted
+              </p>
+            </div>
+
+            {/* Missed Classes */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              <span className="text-xs font-bold text-[#8A9BB0] uppercase tracking-wider font-brand-primary">
+                Missed / Excused
+              </span>
+              <div className="mt-2 text-3xl font-extrabold text-[#DB241E] font-brand-primary font-flight-mono">
+                {student.totalClasses - student.attendedClasses}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Recorded in verified academy biometric ledger
+              </p>
+            </div>
+
+            {/* Buffer Safety Margin */}
+            <div className={`text-white rounded-2xl p-5 shadow-sm border ${isCompliant ? 'bg-gradient-to-br from-[#00274C] to-[#00172E] border-[#00172E]' : 'bg-gradient-to-br from-red-950 to-[#00172E] border-red-900'}`}>
+              <span className="text-xs font-bold text-[#D8A027] uppercase tracking-wider font-brand-primary">
+                {isCompliant ? 'DGCA Safety Cushion' : 'Recovery Runway'}
+              </span>
+              <div className={`mt-2 text-3xl font-extrabold font-brand-primary font-flight-mono ${isCompliant ? 'text-white' : 'text-red-300'}`}>
+                {isCompliant ? `+${bufferSessions} Sessions` : `Need ${recoverySessions} Classes`}
+              </div>
+              <p className="text-xs text-slate-300 mt-1">
+                {isCompliant 
+                  ? 'Permitted leaves before falling below the 80% minimum'
+                  : 'Consecutive attendances required to restore DGCA exam endorsement'}
+              </p>
             </div>
           </div>
-          <p className="text-[11px] text-emerald-600 font-semibold mt-2 flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Compliant with DGCA 80% Rule
-          </p>
-        </div>
-
-        {/* Classes Attended */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <span className="text-xs font-bold text-[#8A9BB0] uppercase tracking-wider font-brand-primary">
-            Attended Lectures
-          </span>
-          <div className="mt-2 text-3xl font-extrabold text-emerald-600 font-brand-primary font-flight-mono">
-            {student.attendedClasses}
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Out of {student.totalClasses} total ground school classes conducted
-          </p>
-        </div>
-
-        {/* Missed Classes */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <span className="text-xs font-bold text-[#8A9BB0] uppercase tracking-wider font-brand-primary">
-            Missed / Excused
-          </span>
-          <div className="mt-2 text-3xl font-extrabold text-[#DB241E] font-brand-primary font-flight-mono">
-            {student.totalClasses - student.attendedClasses}
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            10 Excused (Sim/Medical) • 4 Absent
-          </p>
-        </div>
-
-        {/* Buffer Safety Margin */}
-        <div className="bg-gradient-to-br from-[#00274C] to-[#00172E] text-white rounded-2xl p-5 shadow-sm border border-[#00172E]">
-          <span className="text-xs font-bold text-[#D8A027] uppercase tracking-wider font-brand-primary">
-            DGCA Safety Cushion
-          </span>
-          <div className="mt-2 text-3xl font-extrabold text-white font-brand-primary font-flight-mono">
-            +11 Sessions
-          </div>
-          <p className="text-xs text-slate-300 mt-1">
-            Max permitted leaves before falling below the 80% minimum
-          </p>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Subject-Wise Attendance Breakdown Bars */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">

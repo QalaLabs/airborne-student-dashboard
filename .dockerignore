@@ -15,3 +15,5 @@ venv/
 dist
 public/brand_media
 brand_book_summary.txt
+*.db
+test_production_api.py

@@ -138,7 +138,11 @@ def generate_aerobot_knowledge_response(query: str, context: Dict[str, Any]) -> 
     # -------------------------------------------------------------------------
     # 1. FEES & ACCOUNTS CLEARANCE
     # -------------------------------------------------------------------------
-    if any(k in q for k in ["fee", "due", "pay", "balance", "cost", "account", "installment"]):
+    is_cadet_fee_query = bool(
+        re.search(r'\b(my fee|course fee|pending fee|fee status|fee due|fee balance|pay fee|tuition|installment due|fees and accounts|my dues|how much fee|what are my fees|fee receipt|payment receipt)\b', q)
+        or (re.search(r'\b(fee|dues|installment|balance)\b', q) and any(w in q for w in ["my", "status", "pending", "pay", "due", "how much", "what", "paid"]))
+    )
+    if is_cadet_fee_query:
         pending = student.get('pending_fee', '₹0')
         is_paid = "0" in pending or "INR 0" in pending or "₹0" in pending
         status_line = (
@@ -167,7 +171,10 @@ def generate_aerobot_knowledge_response(query: str, context: Dict[str, Any]) -> 
     # -------------------------------------------------------------------------
     # 2. ATTENDANCE & DGCA COMPLIANCE AUDIT
     # -------------------------------------------------------------------------
-    if any(k in q for k in ["attendance", "present", "absent", "missed", "compliance", "car", "ratio"]):
+    is_attendance_query = bool(
+        re.search(r'\b(attendance|am i present|classes attended|attended classes|mark attendance|attendance audit|attendance rate|attendance status|attendance compliance|duty leave|apply for leave|missed classes?)\b', q)
+    )
+    if is_attendance_query:
         rate_str = str(student.get("attendance_rate", "89.3%")).replace("%", "")
         try:
             rate_val = float(rate_str)
@@ -200,7 +207,10 @@ def generate_aerobot_knowledge_response(query: str, context: Dict[str, Any]) -> 
     # -------------------------------------------------------------------------
     # 3. TIMETABLE & CLASS BRIEFINGS
     # -------------------------------------------------------------------------
-    if any(k in q for k in ["timetable", "schedule", "class", "today", "lecture", "when", "time", "briefing"]):
+    is_timetable_query = bool(
+        re.search(r"\b(timetable|class schedule|today's schedule|my schedule|next class|next lecture|today's class|what class|classes today|daily flight schedule|when is my next (class|lecture|session))\b", q)
+    )
+    if is_timetable_query:
         today_sessions = context.get("today_schedule", [])
         if today_sessions:
             schedule_lines = []
@@ -316,7 +326,27 @@ def generate_aerobot_knowledge_response(query: str, context: Dict[str, Any]) -> 
         return text, ["What is Transition Altitude?", "Calculate Pressure Altitude", "Explain 1 in 60 Rule"]
 
     # -------------------------------------------------------------------------
-    # 7. DEFAULT AUTHORITATIVE AEROBOT BRIEFING
+    # -------------------------------------------------------------------------
+    # 7. DGCA THEORETICAL DOUBT RESOLUTION & RAG TEXTBOOK INTEGRATION
+    # -------------------------------------------------------------------------
+    theory_ans = query_aviation_theory(query)
+    if theory_ans and theory_ans.get('answer'):
+        body = theory_ans['answer'].strip()
+        if re.match(r'^(welcome|good day|hello|hi cadet|### welcome)', body.lower()):
+            parts = body.split('\n\n', 1)
+            body = parts[1] if len(parts) > 1 else body
+        formatted_reply = (
+            f'Good day Cadet {cadet_last}. This is **AeroBot** with your verified DGCA Ground Training briefing:\n\n'
+            f'{body}\n\n'
+            f'---\n'
+            f'**AeroBot** • Flight Deck Copilot & DGCA Ground Mentor  \n'
+            f'*Airborne Aviation Academy — "From Dream to Cockpit"*  \n'
+            f'*Chief Mentor: Capt. Navrang Singh | Dwarka Campus, New Delhi*'
+        )
+        chips = theory_ans.get('chips', ['Explain Further', 'DGCA Exam Question', 'Check My Schedule'])
+        return formatted_reply, chips
+
+    # 8. DEFAULT AUTHORITATIVE AEROBOT BRIEFING
     # -------------------------------------------------------------------------
     text = (
         f"Understood Cadet {cadet_last}. **AeroBot** is standing by on your flight deck frequency.\n\n"
@@ -342,3 +372,63 @@ def generate_aerobot_knowledge_response(query: str, context: Dict[str, Any]) -> 
 # Backwards compatible alias for gateway callers
 forward_query_to_external_gcr_bot = answer_as_aerobot
 
+
+
+def query_aviation_theory(query: str) -> Optional[Dict[str, Any]]:
+    """
+    Queries the DGCA aviation knowledge base and RAG textbook engine.
+    Tries fast in-process import first, then falls back to HTTP endpoint.
+    """
+    # 1. Try local ai_engine import first (zero network latency, token optimized)
+    try:
+        from pathlib import Path
+        import sys
+        base_dir = Path("C:/Users/pc/Desktop/airborne-chatbot")
+        if base_dir.exists():
+            if str(base_dir) not in sys.path:
+                sys.path.insert(0, str(base_dir))
+            from backend.ai_engine import ai_engine
+            res = ai_engine.answer_query(query)
+            if res and res.get("answer"):
+                if "I specialize strictly in" not in res["answer"]:
+                    return res
+    except Exception as e:
+        logger.debug(f"Local RAG engine query notice: {e}")
+
+    # 2. Try external GCR service or fallback HTTP APIs
+    try:
+        import urllib.request
+        from server.config import GCR_CHATBOT_SERVICE_URL
+        urls_to_try = [
+            f"{GCR_CHATBOT_SERVICE_URL.rstrip('/')}/api/chat",
+            "https://airborne-chatbot-368523757732.asia-south1.run.app/api/chat",
+            "http://127.0.0.1:8000/api/chat"
+        ]
+        # Remove duplicates while preserving priority order
+        seen = set()
+        dedup_urls = []
+        for u in urls_to_try:
+            if u not in seen:
+                seen.add(u)
+                dedup_urls.append(u)
+
+        payload = json.dumps({"student_id": "dashboard_cadet", "message": query}).encode("utf-8")
+        for u in dedup_urls:
+            try:
+                req = urllib.request.Request(
+                    u,
+                    data=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=12.0) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        if data and "I specialize strictly in" not in data.get("answer", ""):
+                            return data
+            except Exception as req_err:
+                logger.debug(f"Chatbot endpoint {u} attempt notice: {req_err}")
+                continue
+    except Exception as e:
+        logger.warning(f"HTTP chatbot service notice: {e}")
+
+    return None

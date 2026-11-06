@@ -143,3 +143,55 @@
 .btn-secondary-action:hover {
   background-color: rgba(0, 39, 76, 0.12);
 }
+
+/* Unslop: quiet chrome. Brand navy stays structural. Red is the rare accent. Gold is success only. */
+.font-black,
+.font-extrabold {
+  font-weight: 500 !important;
+  font-style: normal !important;
+  letter-spacing: 0 !important;
+}
+
+.italic {
+  font-style: normal !important;
+}
+
+.uppercase.tracking-wider,
+.uppercase.tracking-wide,
+.tracking-wider.uppercase {
+  text-transform: none !important;
+  letter-spacing: 0.01em !important;
+  font-weight: 500 !important;
+}
+
+.animate-ping,
+.animate-bounce,
+.gold-glow,
+.red-glow {
+  animation: none !important;
+  box-shadow: none !important;
+}
+
+.animate-pulse:not(.live-dot) {
+  animation: none !important;
+}
+
+.live-dot {
+  animation: live-dot 2.4s ease-in-out infinite;
+}
+
+@keyframes live-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.transition-all {
+  transition-property: color, background-color, border-color, opacity !important;
+  transition-duration: 160ms !important;
+  transition-timing-function: ease-out !important;
+}
+
+.font-flight-mono,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

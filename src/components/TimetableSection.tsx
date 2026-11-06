@@ -1,3 +1,4 @@
+import { apiFetch } from '../lib/api';
 import React, { useState } from 'react';
 import { 
   MapPin, 
@@ -247,7 +248,22 @@ export const TimetableSection: React.FC<TimetableSectionProps> = ({
                     <div className="flex items-center gap-2">
                       {session.handoutAvailable && (
                         <button 
-                          onClick={() => alert(`Downloading study notes & question bank for ${session.subjectName}`)}
+                          onClick={async () => {
+                            try {
+                              const code = localStorage.getItem('airborne_student_id') || 'AA-CPL-2026-084';
+                              await apiFetch('/api/v1/activity/log', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                  student_id: code,
+                                  verb: 'handout_downloaded',
+                                  activity_type: 'NOTE',
+                                  title: `Handout Downloaded: ${session.subjectName}`,
+                                  notes: `Cadet downloaded flight handout for ${session.topic} (${session.day}).`
+                                })
+                              });
+                            } catch {}
+                            alert(`Downloading official lecture handout: ${session.subjectName} — ${session.topic}`);
+                          }}
                           className="px-3 py-1.5 rounded-lg bg-[#F5F6F8] hover:bg-slate-200 text-[#00274C] text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                         >
                           <Download className="w-3 h-3 text-[#DB241E]" />

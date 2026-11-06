@@ -523,9 +523,21 @@ def api_get_chapter_questions(chapter_id: str, limit: int = 50):
     return get_live_questions_for_practice(chapter_id=chapter_id, limit=limit)
 
 @app.get("/api/v1/lms/questions/practice")
-def api_get_practice_questions(subject: Optional[str] = None, chapter_id: Optional[str] = None, limit: int = 50):
+def api_get_practice_questions(
+    subject: Optional[str] = None,
+    chapter_id: Optional[str] = None,
+    module_id: Optional[str] = None,
+    course_id: Optional[str] = None,
+    limit: int = 50
+):
     """Returns practice drill questions for cadet tests."""
-    return get_live_questions_for_practice(chapter_id=chapter_id, subject=subject, limit=limit)
+    return get_live_questions_for_practice(
+        chapter_id=chapter_id,
+        module_id=module_id,
+        course_id=course_id,
+        subject=subject,
+        limit=limit
+    )
 
 @app.post("/api/v1/lms/quiz/submit")
 def api_submit_lms_quiz(req: QuizSubmitRequest):

@@ -203,7 +203,12 @@ export const FeesSection: React.FC<FeesSectionProps> = ({
         </div>
 
         <div className="divide-y divide-slate-100">
-          {feeHeads.map((head, idx) => (
+          {feeHeads.length === 0 ? (
+            <div className="py-6 text-center text-xs text-slate-400 font-brand-primary">
+              No custom fee heads allocated yet. Standard course fee applies.
+            </div>
+          ) : (
+            feeHeads.map((head, idx) => (
             <div key={idx} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <span className="text-xs font-bold text-[#00274C] font-brand-primary">
@@ -233,7 +238,7 @@ export const FeesSection: React.FC<FeesSectionProps> = ({
                 </span>
               </div>
             </div>
-          ))}
+          )))}
         </div>
       </div>
 
@@ -249,7 +254,14 @@ export const FeesSection: React.FC<FeesSectionProps> = ({
         </div>
 
         <div className="space-y-3">
-          {installments.map((inst) => {
+          {installments.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <CreditCard className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs font-bold text-slate-700">No payment receipts or pending installments logged yet</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Online fees, UPI, and bank transfers will appear here upon clearance.</p>
+            </div>
+          ) : (
+            installments.map((inst) => {
             const isPaid = inst.status === 'paid';
             return (
               <div
@@ -326,7 +338,7 @@ export const FeesSection: React.FC<FeesSectionProps> = ({
                 </div>
               </div>
             );
-          })}
+          }))}
         </div>
       </div>
 

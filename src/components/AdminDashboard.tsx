@@ -63,14 +63,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedStudentForPay, setSelectedStudentForPay] = useState<AdminStudent | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(35000);
   const [paymentMethod, setPaymentMethod] = useState<string>('BANK_TRANSFER');
-  const [paymentNote, setPaymentNote] = useState<string>('3rd Installment (Pre-Board & WPC RTR Lab)');
+  const [paymentNote, setPaymentNote] = useState<string>('Tuition Installment');
   const [paySuccessMsg, setPaySuccessMsg] = useState<string | null>(null);
 
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
 
   // Provisioning & Admin OS Bridge State
-  const [selectedStudentForProvision, setSelectedStudentForProvision] = useState<string>('AA-CPL-2026-084');
-  const [provisionalPassword, setProvisionalPassword] = useState<string>('PilotCadet2026!');
+  const [selectedStudentForProvision, setSelectedStudentForProvision] = useState<string>('');
+  const [provisionalPassword, setProvisionalPassword] = useState<string>('');
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(true);
   const [isProvisioning, setIsProvisioning] = useState<boolean>(false);
   const [provisionResult, setProvisionResult] = useState<any | null>(null);
@@ -864,7 +864,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               onClick={() => {
                 if (students.length > 0) {
                   setSelectedStudentForPay(students[0]);
-                  setPaymentAmount(35000);
+                  setPaymentAmount(students[0].feeBalance || 0);
                   setShowPaymentModal(true);
                 }
               }}
@@ -1059,23 +1059,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       ))}
                     </datalist>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                    <span className="text-[10px] text-slate-400">Quick fill:</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStudentForProvision('APP-2026-00010')}
-                      className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-800 hover:bg-blue-100 font-flight-mono font-semibold border border-blue-200 cursor-pointer"
-                    >
-                      APP-2026-00010 (Enrolled Admission)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStudentForProvision('APP-2026-00418')}
-                      className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 font-flight-mono font-semibold border border-slate-200 cursor-pointer"
-                    >
-                      APP-2026-00418 (Ruzal Dhral)
-                    </button>
-                  </div>
+                  {students.length > 0 && (
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span className="text-[10px] text-slate-400">Enrolled roster:</span>
+                      {students.slice(0, 3).map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSelectedStudentForProvision(s.applicationNo || s.studentCode)}
+                          className="text-[10px] px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-flight-mono font-semibold border border-slate-200 cursor-pointer"
+                        >
+                          {s.applicationNo || s.studentCode} ({s.name.split(' ')[0]})
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Temp Password Input with Random Generator */}

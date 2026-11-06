@@ -27,8 +27,11 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
-  const [leaveReason, setLeaveReason] = useState('DGCA Class 1 Medical Renewal (Air Force Central Medical Establishment - AFCME)');
-  const [leaveDate, setLeaveDate] = useState('05 Nov 2026');
+  const [leaveReason, setLeaveReason] = useState('');
+  const [leaveDate, setLeaveDate] = useState(() => {
+    const tomorrow = new Date(Date.now() + 86400000);
+    return tomorrow.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  });
   const [leaveSubmitted, setLeaveSubmitted] = useState(false);
 
   const filteredRecords = filterStatus === 'ALL'
@@ -58,13 +61,33 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
     }
   };
 
-  const subjectAttendance = [
-    { subject: 'Air Regulations (CARs)', percentage: 92, status: 'Compliant' },
-    { subject: 'Aviation Meteorology', percentage: 90, status: 'Compliant' },
-    { subject: 'Technical General', percentage: 88, status: 'Compliant' },
-    { subject: 'Air Navigation', percentage: 85, status: 'Compliant' },
-    { subject: 'Radio Telephony RTR(A)', percentage: 82, status: 'Compliant' },
-  ];
+  const subjectAttendance = React.useMemo(() => {
+    if (!records || records.length === 0) {
+      const overall = student.attendanceRate || 0;
+      return [
+        { subject: 'Air Regulations (CARs)', percentage: overall, status: overall >= 80 ? 'Compliant' : 'Warning' },
+        { subject: 'Aviation Meteorology', percentage: overall, status: overall >= 80 ? 'Compliant' : 'Warning' },
+        { subject: 'Technical General', percentage: overall, status: overall >= 80 ? 'Compliant' : 'Warning' },
+        { subject: 'Air Navigation', percentage: overall, status: overall >= 80 ? 'Compliant' : 'Warning' },
+        { subject: 'Radio Telephony RTR(A)', percentage: overall, status: overall >= 80 ? 'Compliant' : 'Warning' },
+      ];
+    }
+    const counts: Record<string, { present: number; total: number }> = {};
+    records.forEach(r => {
+      const s = r.subject || 'Ground Subject';
+      if (!counts[s]) counts[s] = { present: 0, total: 0 };
+      counts[s].total += 1;
+      if (r.status === 'Present') counts[s].present += 1;
+    });
+    return Object.entries(counts).map(([sub, data]) => {
+      const pct = Math.round((data.present / Math.max(1, data.total)) * 100);
+      return {
+        subject: sub,
+        percentage: pct,
+        status: pct >= 80 ? 'Compliant' : 'Warning'
+      };
+    });
+  }, [records, student.attendanceRate]);
 
   return (
     <div className="space-y-6">
@@ -285,7 +308,14 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
-              {filteredRecords.map((r) => {
+              {filteredRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400 font-brand-primary text-xs">
+                    No biometric or mentor-verified check-in logs recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                filteredRecords.map((r) => {
                 const isPresent = r.status === 'Present';
                 const isAbsent = r.status === 'Absent';
                 const isExcused = r.status === 'Excused';
@@ -322,7 +352,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>

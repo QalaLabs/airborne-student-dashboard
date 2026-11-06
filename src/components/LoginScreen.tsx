@@ -36,6 +36,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setPassword('');
   };
 
+  const handleQuickFill = (role: UserRole, id: string, pass: string) => {
+    setSelectedRole(role);
+    setIdentifier(id);
+    setPassword(pass);
+    setErrorMsg(null);
+  };
+
 
   const executeLogin = async (roleToUse: UserRole, idToUse: string, passToUse: string) => {
     setErrorMsg(null);

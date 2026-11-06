@@ -346,8 +346,17 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
       </div>
 
       {/* Courses Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {courses.map((course) => {
+      {courses.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center space-y-3">
+          <BookOpen className="w-10 h-10 text-slate-300 mx-auto" />
+          <h3 className="font-bold font-brand-primary text-[#00274C] text-base">Ground School Syllabus Pending Allocation</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Your DGCA curriculum subjects (Air Navigation, Aviation Meteorology, Air Regulations, Technical General, and RTR) will appear here upon cohort batch commencement.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {courses.map((course) => {
           const isCleared = course.progress === 100;
           const matchedLive = findMatchingLiveCourse(course);
           const liveQCount = matchedLive?.totalQuestions ?? 0;
@@ -433,7 +442,8 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Syllabus & Chapter Quizzes Modal */}
       {selectedCourse && (
